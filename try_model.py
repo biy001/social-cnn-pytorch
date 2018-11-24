@@ -11,12 +11,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 
-# ---------  things to do: --------
-# things to do:
-# tune learning rate?
-# gradient clipping to avoid loss increasing?
-# ----------------------------------
-
 class CNNTrajNet(nn.Module):
 
     def __init__(self, args):   
@@ -153,29 +147,15 @@ def reshape_output(s, mode ='disp'):
     - disp: (batch, seq_len, 2) = m X T X 2
     - fina_disp: m X 2
     """
-    # print(s.size())
     s_2D = torch.squeeze(s) # 2m X T  
-    # print(s_2D.size())
-
     s_cluster = torch.split(s, 2, dim=1) # (m X T, m X T, m X T, ...)
-    # print(len(s_cluster))
-
-
     s_stack = torch.stack(s_cluster) # m X 1 X 2 X T
     s_stack = torch.squeeze(s_stack, 1) # m X 2 X T
-    # print(s_stack.size())
-
-
     s_stack_trans = torch.transpose(s_stack, 1, 2) # m X T X 2
-    # print(s_stack_trans.size())
-
-
     if  mode == 'disp':
         return s_stack_trans
     elif mode == 'f_disp':
         return torch.squeeze(torch.split(s_stack_trans, 1, dim=1)[-1], 1)
-
-
 
 def displacement_error(pred_traj, pred_traj_gt, mode='average'):
     """
@@ -206,7 +186,6 @@ def final_displacement_error(pred_pos, pred_pos_gt):
     Output:
     - loss: gives the eculidian displacement error
     """
-    # print(pred_pos.size())
     m, _ = pred_pos.size()
     loss = (pred_pos_gt - pred_pos)**2
     loss = torch.sqrt(loss.sum(dim=1)) # m
@@ -268,24 +247,15 @@ def main():
     train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=args.batch_size, shuffle=True)
     dev_loader = torch.utils.data.DataLoader(dataset=dev_set, batch_size=args.batch_size, shuffle=True)
     test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=True)
-    
-    # ---------  leave room for data logging--------
-    # create log files...use log_interval...
-    # resume saved model in training...
-    # use saved model for testing...
-    # ---------  finish file creating--------
-
 
     device = torch.device("cuda" if use_cuda else "cpu")
     model = CNNTrajNet(args).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr = args.learning_rate, weight_decay=args.lambda_param)
 
     for epoch in range(1, args.epochs + 1):
-        train_losses = train(args, model, device, train_loader, optimizer, epoch)   #--------- use losses to graph? ---------
-        test_losses = test(args, model, device, test_loader)       # why do I put train and test in the same for-loop?
-        print('finish epoch {}'.format(epoch))                     # Is dev set something we look at by naked eye and used to tune hyperparameters?
-
-
+        train_losses = train(args, model, device, train_loader, optimizer, epoch)   
+        test_losses = test(args, model, device, test_loader)      
+        print('finish epoch {}'.format(epoch))             
 
 if __name__ == '__main__':
     main()

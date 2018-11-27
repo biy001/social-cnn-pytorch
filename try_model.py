@@ -1,7 +1,5 @@
 """
-input: assume x is input_sequence from one example of (input_sequence, prediction_sequence) 
-x inital size: 1 X 2m X t
-1 is the batch_size, m is the # of pedestrians in that one example, t is the input sequence length
+Experiments on the model:
 Note 1: max pooling makes performance worse FF.leaky_relu(F.max_pool2d(self.bn1(x), kernel_size = ...)) 
 kernel_size = 2, stride=1, padding = 1, dilation=2 => initial error: 0.08
 kernel_size = 3, stride=1, padding = 1 => initial error: 0.14

@@ -1,16 +1,21 @@
-import os
-import torch
-import torch.utils.data
-import pickle
-import numpy as np
-import random
-import argparse
-from torch.autograd import Variable
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+"""
+input: assume x is input_sequence from one example of (input_sequence, prediction_sequence) 
+x inital size: 1 X 2m X t
+1 is the batch_size, m is the # of pedestrians in that one example, t is the input sequence length
+Note 1: max pooling makes performance worse FF.leaky_relu(F.max_pool2d(self.bn1(x), kernel_size = ...)) 
+kernel_size = 2, stride=1, padding = 1, dilation=2 => initial error: 0.08
+kernel_size = 3, stride=1, padding = 1 => initial error: 0.14
+Note 2: adding an extra fc at output doesn't help; adding a 5th conv layer worsens result; increasing conv channels worsens result
+Note 3: a larger dev set portion results in worse train error => more training data could help
+Note 4: dropout doesn't seem to help dev error but could worsen train performance
+Note 5: changing learning rate from 0.001 to 0.0001 or adding learning rate decay doesn't seem to make a difference
+Note 6: Adam is better than SGD
+Note 7: adding batch norm and relu to intermediate fc layer doesn't help
+Note 8: changing relu to leaky_relu improves a lot??? + dev error is much smaller than train error???
 
+Note: best ever train error 0.019 + dev error 0.001 (Epoch 40); (old/typically: train error 0.0526 + dev error 0.0649)
+* current version is the best version *
+"""
 # ---------  things to do: --------
 # things to do:
 # gradient clipping to avoid loss increasing? Currently not increasing but oscillating
@@ -23,6 +28,18 @@ from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 
 # ask TA how to make input consistent in order to apply batches
 # ----------------------------------
+import os
+import torch
+import torch.utils.data
+import pickle
+import numpy as np
+import random
+import argparse
+from torch.autograd import Variable
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 
 class CNNTrajNet(nn.Module):
 
@@ -68,19 +85,6 @@ class CNNTrajNet(nn.Module):
         input: assume x is input_sequence from one example of (input_sequence, prediction_sequence) 
         x inital size: 1 X 2m X t
         1 is the batch_size, m is the # of pedestrians in that one example, t is the input sequence length
-        Note 1: max pooling makes performance worse FF.leaky_relu(F.max_pool2d(self.bn1(x), kernel_size = ...)) 
-        kernel_size = 2, stride=1, padding = 1, dilation=2 => initial error: 0.08
-        kernel_size = 3, stride=1, padding = 1 => initial error: 0.14
-        Note 2: adding an extra fc at output doesn't help; adding a 5th conv layer worsens result; increasing conv channels worsens result
-        Note 3: a larger dev set portion results in worse train error => more training data could help
-        Note 4: dropout doesn't seem to help dev error but could worsen train performance
-        Note 5: changing learning rate from 0.001 to 0.0001 or adding learning rate decay doesn't seem to make a difference
-        Note 6: Adam is better than SGD
-        Note 7: adding batch norm and relu to intermediate fc layer doesn't help
-        Note 8: changing relu to leaky_relu improves a lot??? + dev error is much smaller than train error???
-
-        Note: best ever train error 0.019 + dev error 0.001 (Epoch 40); (old/typically: train error 0.0526 + dev error 0.0649)
-        * current version is the best version *
         """
         x = x.float()
         x = torch.unsqueeze(x, 3)  # 1 X 2m X t_input X 1

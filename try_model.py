@@ -76,7 +76,7 @@ class CNNTrajNet(nn.Module):
         Note 4: dropout doesn't seem to help dev error but could worsen train performance
         Note 5: changing learning rate from 0.001 to 0.0001 or adding learning rate decay doesn't seem to make a difference
         Note 6: Adam is better than SGD
-        Note 7: adding batch norm and relu to iterminediate fc layer doesn't help
+        Note 7: adding batch norm and relu to intermediate fc layer doesn't help
         Note 8: changing relu to leaky_relu improves a lot??? + dev error is much smaller than train error???
 
         Note: best ever train error 0.019 + dev error 0.001 (Epoch 40); (old/typically: train error 0.0526 + dev error 0.0649)

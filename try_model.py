@@ -11,6 +11,19 @@ import torch.nn.functional as F
 import torch.optim as optim
 from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 
+# ---------  things to do: --------
+# things to do:
+# gradient clipping to avoid loss increasing? Currently not increasing but oscillating
+
+# 11/26 possible things to try:
+# look at some resulted trajectories in plot
+# add some other means of regularization other than dropout?
+
+# data augmentation 
+
+# ask TA how to make input consistent in order to apply batches
+# ----------------------------------
+
 class CNNTrajNet(nn.Module):
 
     def __init__(self, args):   
@@ -27,52 +40,86 @@ class CNNTrajNet(nn.Module):
 
         self.input_embedding_layer = nn.Linear(1, self.embedding_size) # assume embedding_size = 24
 
-        self.conv1 = nn.Conv2d(in_channels = self.input_size, out_channels = 2*self.input_size, kernel_size = 3, padding = (0,1))
+        self.conv1 = nn.Conv2d(in_channels = self.input_size, out_channels = 2*self.input_size, kernel_size = 3, padding = (0,2), dilation=2)
         self.bn1 = nn.BatchNorm2d(2*self.input_size) # padding 1 to keep the same size
-        self.conv2 = nn.Conv2d(in_channels = 2*self.input_size, out_channels = 4*self.input_size, kernel_size = 3, padding = (0,1))
+        self.conv2 = nn.Conv2d(in_channels = 2*self.input_size, out_channels = 4*self.input_size, kernel_size = 3, padding = (0,2), dilation=2)
         self.bn2 = nn.BatchNorm2d(4*self.input_size)
-        self.conv3 = nn.Conv2d(in_channels = 4*self.input_size, out_channels = 6*self.input_size, kernel_size = 3, padding = (0,1))
+        self.conv3 = nn.Conv2d(in_channels = 4*self.input_size, out_channels = 6*self.input_size, kernel_size = 3, padding = (0,2), dilation=2)
         self.bn3 = nn.BatchNorm2d(6*self.input_size)
-        self.conv4 = nn.Conv2d(in_channels = 6*self.input_size, out_channels = 8*self.input_size, kernel_size = 3, padding = (0,1))
+        self.conv4 = nn.Conv2d(in_channels = 6*self.input_size, out_channels = 8*self.input_size, kernel_size = 3, padding = (0,2), dilation=2)
         self.bn4 = nn.BatchNorm2d(8*self.input_size)
 
-        self.conv5 = nn.Conv2d(in_channels = 8*self.input_size, out_channels = 6*self.input_size, kernel_size = (16,3), padding = (0,1))
-        self.bn5 = nn.BatchNorm2d(6*self.input_size)
+        # self.conv5 = nn.Conv2d(in_channels = 8*self.input_size, out_channels = 10*self.input_size, kernel_size = 3, padding = (0,2), dilation=2)
+        # self.bn5 = nn.BatchNorm2d(10*self.input_size)
 
-        self.output_fc = nn.Linear(6*self.input_size, self.output_size)
+        self.interm_fc1 = nn.Linear(8*16*self.input_size, 8*self.input_size)
+        # self.interm_fc1_bn = nn.BatchNorm2d(8*self.input_size)
+        # self.interm_fc2 = nn.Linear(8*8*self.input_size, 8*self.output_size)
+        self.output_fc = nn.Linear(8*self.input_size, self.output_size)
 
         # ReLU and dropout unit
         # self.relu = nn.ReLU()
         # self.conv2_drop = nn.Dropout2d()
         # self.dropout = nn.Dropout(args.dropout)
+        self.dropout_rate = args.dropout_rate
 
     def forward(self, x):
-        # assume x is input_sequence from one example of (input_sequence, prediction_sequence) 
-        # x inital size: 1 X 2m X t
-        # 1 is the batch_size, m is the # of pedestrians in that one example, t is the input sequence length
+        """
+        input: assume x is input_sequence from one example of (input_sequence, prediction_sequence) 
+        x inital size: 1 X 2m X t
+        1 is the batch_size, m is the # of pedestrians in that one example, t is the input sequence length
+        Note 1: max pooling makes performance worse FF.leaky_relu(F.max_pool2d(self.bn1(x), kernel_size = ...)) 
+        kernel_size = 2, stride=1, padding = 1, dilation=2 => initial error: 0.08
+        kernel_size = 3, stride=1, padding = 1 => initial error: 0.14
+        Note 2: adding an extra fc at output doesn't help; adding a 5th conv layer worsens result; increasing conv channels worsens result
+        Note 3: a larger dev set portion results in worse train error => more training data could help
+        Note 4: dropout doesn't seem to help dev error but could worsen train performance
+        Note 5: changing learning rate from 0.001 to 0.0001 or adding learning rate decay doesn't seem to make a difference
+        Note 6: Adam is better than SGD
+        Note 7: adding batch norm and relu to iterminediate fc layer doesn't help
+        Note 8: changing relu to leaky_relu improves a lot??? + dev error is much smaller than train error???
+
+        Note: best ever train error 0.019 + dev error 0.001 (Epoch 40); (old/typically: train error 0.0526 + dev error 0.0649)
+        * current version is the best version *
+        """
         x = x.float()
         x = torch.unsqueeze(x, 3)  # 1 X 2m X t_input X 1
-        x = F.leaky_relu(self.input_embedding_layer(x)) # 1 X 2m X t_input X 24
+        x = F.leaky_relu(self.input_embedding_layer(x)) # 1 X 2m X t_input X 32
 
-        x = torch.transpose(x, 1, 3) # (N, H, C, W) = 1 X 24 X t X 2m
-        x = torch.transpose(x, 1, 2) # (N, C, H, W) = 1 X t X 24 X 2m
+        x = torch.transpose(x, 1, 3) # (N, H, C, W) = 1 X 32 X t X 2m
+        x = torch.transpose(x, 1, 2) # (N, C, H, W) = 1 X t X 32 X 2m
 
-        x = self.conv1(x)
-        x = F.leaky_relu(self.bn1(x))
+
+        x = self.conv1(x) # or FF.leaky_relu(F.max_pool2d(self.bn1(x), kernel_size = 2, stride=1, padding = 1, dilation=2)) error of 0.08
+        x = F.leaky_relu(self.bn1(x))  
         x = self.conv2(x)
-        x = F.leaky_relu(self.bn2(x))
+        x = F.leaky_relu(self.bn2(x)) 
         x = self.conv3(x)
         x = F.leaky_relu(self.bn3(x))
         x = self.conv4(x)
-        x = F.leaky_relu(self.bn4(x)) # (N, C, H, W) = 1 X 8t X 16 X 2m
+        x = F.leaky_relu(self.bn4(x))   # (N, C, H, W) = 1 X 8t X 16 X 2m
 
-        x = self.conv5(x)
-        x = F.leaky_relu(self.bn5(x)) # (N, C, H, W) = 1 X 6t X 1 X 2m
+        # x = self.conv5(x)
+        # x = F.leaky_relu(self.bn5(x))   # (N, C, H, W) = 1 X 10t X 12 X 2m
 
-        x = torch.transpose(x, 1, 3) # (N, W, H, C) = 1 X 2m X 1 X 6t
+        x = torch.cat(torch.split(x, 1, dim=1), 2) # (N, H, C, W) = 1 X 1 X 8t*16 X 2m
+
+        x = torch.transpose(x, 2, 3) # (N, H, W, C) = 1 X 1 X 2m X 8t*16
+        x = torch.transpose(x, 1, 2) # (N, W, H, C) = 1 X 2m X 1 X 8t*16
+
+        x = self.interm_fc1(x) # (N, W, H, C) = 1 X 2m X 1 X 8t*8
+        # x = self.interm_fc2(x) # (N, W, H, C) = 1 X 2m X 1 X 8t
+
+        # # add batch norm and reulu to the itermediate fc layer
+        # x = self.interm_fc1_bn(torch.transpose(x, 1, 3)) # (N, C, H, W) = 1 X 8t X 1 X 2m
+        # x = F.leaky_relu(torch.transpose(x, 1, 3))
+
+        # # add dropout
+        # if self.dropout_rate != 0:
+        #     x = F.dropout(x, p=self.dropout_rate, training=self.training)
+
         x = self.output_fc(x) # (N, W, H, C) = 1 X 2m X 1 X T
-
-        return F.relu(x)
+        return F.leaky_relu(x)
 
 
 def train(args, model, device, train_loader, optimizer, epoch):
@@ -113,8 +160,7 @@ def train(args, model, device, train_loader, optimizer, epoch):
     return losses
 
 
-
-def test(args, model, device, test_loader):
+def vali(args, model, device, test_loader):
     model.eval()
     loss_func = nn.MSELoss()
     test_loss = 0
@@ -134,7 +180,7 @@ def test(args, model, device, test_loader):
     test_loss /= len(test_loader.dataset)
     disp_error /= len(test_loader.dataset)
     fina_disp_error /= len(test_loader.dataset)
-    print('\nTest set: Average loss: {:.4f}, disp error: {:.4f}, final disp error: {:.4f}\n'.format(
+    print('\nDev set: Average loss: {:.4f}, disp error: {:.4f}, final disp error: {:.4f}\n'.format(
         test_loss, disp_error, fina_disp_error))
     return losses
 
@@ -157,6 +203,7 @@ def reshape_output(s, mode ='disp'):
     elif mode == 'f_disp':
         return torch.squeeze(torch.split(s_stack_trans, 1, dim=1)[-1], 1)
 
+    
 def displacement_error(pred_traj, pred_traj_gt, mode='average'):
     """
     Input:  
@@ -186,11 +233,16 @@ def final_displacement_error(pred_pos, pred_pos_gt):
     Output:
     - loss: gives the eculidian displacement error
     """
+    # print(pred_pos.size())
     m, _ = pred_pos.size()
     loss = (pred_pos_gt - pred_pos)**2
     loss = torch.sqrt(loss.sum(dim=1)) # m
     loss = torch.sum(loss)/m # a scalar: loss for each person
     return loss  # a tensor
+
+def adjust_learning_rate(optimizer, epoch, decay_rate, original_lr):
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = 1./(1+decay_rate*epoch)*original_lr
 
 
 def main():
@@ -203,8 +255,8 @@ def main():
     parser.add_argument('--epochs', type=int, default=100, 
                         help='number of epochs to train (default: 100)')
 
-    parser.add_argument('--dev_fraction', type=int, default=0.0,      # not using dev set for now
-                        help='the fraction of dev set (default: 0.0)')
+    parser.add_argument('--dev_fraction', type=int, default=0.1,      # not using dev set for now
+                        help='the fraction of dev set')
     parser.add_argument('--testset', type=list, default=[2],     
                         help='test_data_sets (default: [2])')
     parser.add_argument('--forcePreProcess', type=bool, default=False,     
@@ -214,13 +266,15 @@ def main():
                         help='save frequency')
     # Dropout not implemented.
     # Dropout probability parameter
-    parser.add_argument('--dropout', type=float, default=0.2,       # not using dropout for now
+    parser.add_argument('--dropout_rate', type=float, default=0.4,       # not using dropout for now
                         help='dropout probability (default: 0.2)')
     # Dimension of the embeddings parameter
-    parser.add_argument('--embedding_size', type=int, default=24,
+    parser.add_argument('--embedding_size', type=int, default=32,
                         help='Embedding dimension for the spatial coordinates')
     parser.add_argument('--learning_rate', type=float, default=0.001, 
-                        help='learning rate (default: 0.001)')
+                        help='learning rate')
+    parser.add_argument('--lr_decay_rate', type=float, default=0.1, 
+                        help='learning rate decay rate')
     # Lambda regularization parameter (L2)
     parser.add_argument('--lambda_param', type=float, default=0.0005,
                         help='L2 regularization parameter')
@@ -228,7 +282,7 @@ def main():
                         help='disables CUDA training')
     parser.add_argument('--seed', type=int, default=1,
                         help='random seed (default: 1)')
-    parser.add_argument('--log_interval', type=int, default=40,
+    parser.add_argument('--log_interval', type=int, default=100,
                         help='how many batches to wait before logging training status')
     parser.add_argument('--verbose', type=bool, default=True,     
                         help='printing log')
@@ -247,15 +301,19 @@ def main():
     train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=args.batch_size, shuffle=True)
     dev_loader = torch.utils.data.DataLoader(dataset=dev_set, batch_size=args.batch_size, shuffle=True)
     test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=True)
-
+   
     device = torch.device("cuda" if use_cuda else "cpu")
     model = CNNTrajNet(args).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr = args.learning_rate, weight_decay=args.lambda_param)
+    # optimizer = torch.optim.SGD(model.parameters(), lr= args.learning_rate, momentum=0.9, weight_decay=args.lambda_param)
 
     for epoch in range(1, args.epochs + 1):
-        train_losses = train(args, model, device, train_loader, optimizer, epoch)   
-        test_losses = test(args, model, device, test_loader)      
-        print('finish epoch {}'.format(epoch))             
+        # adjust_learning_rate(optimizer, epoch, args.lr_decay_rate, args.learning_rate)
+        train_losses = train(args, model, device, train_loader, optimizer, epoch)   #--------- use losses to graph? ---------
+        dev_losses = vali(args, model, device, dev_loader)       
+        print('finish epoch {}'.format(epoch))                    
+
+
 
 if __name__ == '__main__':
     main()

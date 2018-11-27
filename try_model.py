@@ -257,8 +257,8 @@ def main():
     parser.add_argument('--epochs', type=int, default=100, 
                         help='number of epochs to train (default: 100)')
 
-    parser.add_argument('--dev_fraction', type=int, default=0.1,      # not using dev set for now
-                        help='the fraction of dev set')
+    parser.add_argument('--dev_ratio', type=int, default=0.1,      # not using dev set for now
+                        help='the ratio of dev set to test set')
     parser.add_argument('--testset', type=list, default=[2],     
                         help='test_data_sets (default: [2])')
     parser.add_argument('--forcePreProcess', type=bool, default=False,     
@@ -294,15 +294,19 @@ def main():
     torch.manual_seed(args.seed)
 
     # Data preprocessor
-    processor = CustomDataPreprocessorForCNN(input_seq_length=args.input_size, pred_seq_length=args.output_size, test_data_sets = args.testset, dev_fraction = args.dev_fraction, forcePreProcess=args.forcePreProcess)
+    processor = CustomDataPreprocessorForCNN(input_seq_length=args.input_size, pred_seq_length=args.output_size, test_data_sets = args.testset, dev_ratio_to_test_set = args.dev_ratio, forcePreProcess=args.forcePreProcess)
     # Processed datasets. (training/dev/test)
+    print("Loading data from the pickle files. This may take a while...")
     train_set = CustomDatasetForCNN(processor.processed_train_data_file)
     dev_set = CustomDatasetForCNN(processor.processed_dev_data_file)
-    test_set = CustomDatasetForCNN(processor.processed_dev_data_file)
+    test_set = CustomDatasetForCNN(processor.processed_test_data_file)
     # Use DataLoader object to load data. Note batch_size=1 is necessary since each datum has different rows (i.e. number of pedestrians).
     train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=args.batch_size, shuffle=True)
     dev_loader = torch.utils.data.DataLoader(dataset=dev_set, batch_size=args.batch_size, shuffle=True)
     test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=True)
+    print("Training set size: {}".format(len(train_loader)))
+    print("Dev set size: {}".format(len(dev_loader)))
+    print("Test set size: {}".format(len(test_loader)))
    
     device = torch.device("cuda" if use_cuda else "cpu")
     model = CNNTrajNet(args).to(device)

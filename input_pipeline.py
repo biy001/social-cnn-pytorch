@@ -30,7 +30,7 @@ import random
 # -------------- Finish Questions ---------------- #
 
 class CustomDataPreprocessorForCNN():
-    def __init__(self, input_seq_length=5, pred_seq_length=5, datasets=[i for i in range(37)], test_data_sets = [2], dev_fraction = 0.1, forcePreProcess=False):
+    def __init__(self, input_seq_length=5, pred_seq_length=5, datasets=[i for i in range(37)], test_data_sets = [2], dev_ratio_to_test_set = 0.1, forcePreProcess=False):
         '''
         Initializer function for the CustomDataSetForCNN class
         params:
@@ -38,7 +38,7 @@ class CustomDataPreprocessorForCNN():
         output_seq_length : output sequence length to be predicted
         datasets : The indices of the datasets to use
         test_data_sets : The indices of the test sets from datasets
-        dev_fraction : fraction of the validation set
+        dev_ratio_to_test_set : ratio of the validation set size to the test set size
         forcePreProcess : Flag to forcefully preprocess the data again from csv files
         '''
         # List of data directories where raw data resides
@@ -78,7 +78,7 @@ class CustomDataPreprocessorForCNN():
         self.pred_seq_length = pred_seq_length
         
         # Validation arguments
-        self.dev_fraction = dev_fraction
+        self.dev_fraction = dev_ratio_to_test_set
         
         # Define the path in which the process data would be stored
         self.processed_train_data_file = os.path.join(self.data_dir, "trajectories_cnn_train.cpkl")
@@ -86,12 +86,12 @@ class CustomDataPreprocessorForCNN():
         self.processed_test_data_file = os.path.join(self.data_dir, "trajectories_cnn_test.cpkl")
         
         # If the file doesn't exist or forcePreProcess is true
-        if not(os.path.exists(self.processed_train_data_file)) or not(os.path.exists(self.processed_dev_data_file)) or forcePreProcess:
-            print("------ Creating pre-processed training & dev data for CNN ------")
-            self.preprocess(self.train_data_dirs, self.processed_train_data_file, self.dev_fraction, self.processed_dev_data_file)
-        if not(os.path.exists(self.processed_test_data_file)) or forcePreProcess:
-            print("------ Creating pre-processed test data for CNN ------")
-            self.preprocess(self.test_data_dirs, self.processed_test_data_file)
+        if not(os.path.exists(self.processed_train_data_file)) or forcePreProcess:
+            print("------ Creating pre-processed training data for CNN ------")
+            self.preprocess(self.train_data_dirs, self.processed_train_data_file)
+        if not(os.path.exists(self.processed_dev_data_file)) or not(os.path.exists(self.processed_test_data_file)) or forcePreProcess:
+            print("------ Creating pre-processed dev & test data for CNN ------")
+            self.preprocess(self.test_data_dirs, self.processed_test_data_file, self.dev_fraction, self.processed_dev_data_file)
         
     def preprocess(self, data_dirs, data_file, dev_fraction = 0., data_file_2 = None):
         #frameList_data = []
@@ -153,6 +153,44 @@ class CustomDataPreprocessorForCNN():
                     processed_pair = (torch.from_numpy(data_input), torch.from_numpy(data_output))
                     processed_input_output_pairs.append(processed_pair)
                     
+                    # Perform data augmentation. Rotate (x,y)-coordinates from 5 deg to 355 deg with 5 deg space, and flip y. The amount of data is x144 the original data.
+                    # # First, flip the original data.
+                    data_input_yflipped = np.zeros_like(data_input)
+                    data_output_yflipped = np.zeros_like(data_output)
+                    for kk in range(len(pedsList)):
+                        data_input_yflipped[2*kk, :] = data_input[2*kk, :]
+                        data_input_yflipped[2*kk+1, :] = -1*data_input[2*kk+1, :]
+                        data_output_yflipped[2*kk, :] = data_output[2*kk, :]
+                        data_output_yflipped[2*kk+1, :] = -1*data_output[2*kk+1, :]
+                    processed_pair_yflipped = (torch.from_numpy(data_input_yflipped), torch.from_numpy(data_output_yflipped))
+                    processed_input_output_pairs.append(processed_pair_yflipped)
+                    # # Then rotate by 5 deg sequentially and also flip for each rotated data
+                    for deg in range(5, 360, 5):
+                        data_input_rotated = np.zeros_like(data_input)
+                        data_input_rotated_yflipped = np.zeros_like(data_input)
+                        data_output_rotated = np.zeros_like(data_output)
+                        data_output_rotated_yflipped = np.zeros_like(data_output)
+                        rad = np.radians(deg)
+                        c, s = np.cos(rad), np.sin(rad)
+                        Rot = np.array(((c,-s), (s, c)))
+                        for ii in range(len(pedsList)):
+                            for jj in range(self.input_seq_length):
+                                coordinates_for_this_ped = data_input[2*ii:2*(ii+1), jj]
+                                new_coordinates_for_this_ped = np.dot(Rot, coordinates_for_this_ped)
+                                data_input_rotated[2*ii:2*(ii+1), jj] = new_coordinates_for_this_ped
+                            data_input_rotated_yflipped[2*ii, :] = data_input_rotated[2*ii, :]    
+                            data_input_rotated_yflipped[2*ii+1, :] = -1*data_input_rotated[2*ii+1, :]
+                            for jj in range(self.pred_seq_length):
+                                coordinates_for_this_ped = data_output[2*ii:2*(ii+1), jj]
+                                new_coordinates_for_this_ped = np.dot(Rot, coordinates_for_this_ped)
+                                data_output_rotated[2*ii:2*(ii+1), jj] = new_coordinates_for_this_ped
+                            data_output_rotated_yflipped[2*ii, :] = data_output_rotated[2*ii, :]
+                            data_output_rotated_yflipped[2*ii+1, :] = -1*data_output_rotated[2*ii+1, :]
+                        processed_pair_rotated = (torch.from_numpy(data_input_rotated), torch.from_numpy(data_output_rotated))
+                        processed_input_output_pairs.append(processed_pair_rotated)   
+                        processed_pair_rotated_yflipped = (torch.from_numpy(data_input_rotated_yflipped), torch.from_numpy(data_output_rotated_yflipped))
+                        processed_input_output_pairs.append(processed_pair_rotated_yflipped)
+                        
                     ind += self.input_seq_length +  self.pred_seq_length - 1
                 else:
                     ind += 1
@@ -164,12 +202,13 @@ class CustomDataPreprocessorForCNN():
         random.seed(1)
         random.shuffle(processed_input_output_pairs)
         if dev_fraction != 0.:
+            assert(data_file_2 != None)
             dev_size = int(len(processed_input_output_pairs)*dev_fraction)
             processed_dev_set = processed_input_output_pairs[:dev_size]
-            processed_train_set = processed_input_output_pairs[dev_size:]
+            processed_test_set = processed_input_output_pairs[dev_size:]
             # Save processed data.
             f = open(data_file, 'wb')
-            pickle.dump(processed_train_set, f, protocol=2)
+            pickle.dump(processed_test_set, f, protocol=2)
             f.close()
             f2 = open(data_file_2, 'wb')
             pickle.dump(processed_dev_set, f2, protocol=2)
@@ -183,15 +222,13 @@ class CustomDataPreprocessorForCNN():
 class CustomDatasetForCNN(torch.utils.data.Dataset):
     def __init__(self, file_path):
         self.file_path = file_path
+        self.file = open(self.file_path, 'rb')
+        self.data = pickle.load(self.file)
+        self.file.close()
     
     def __getitem__(self, index):
-        file = open(self.file_path, 'rb')
-        data = pickle.load(file)
-        item = data[index]
-        file.close()
+        item = self.data[index]
         return item
     
     def __len__(self):
-        file = open(self.file_path, 'rb')
-        data = pickle.load(file)
-        return len(data)
+        return len(self.data)    

@@ -315,7 +315,7 @@ def main():
     # ----------------------------------
     log_directory = 'log/'   # log_file format: epoch, average_train_loss, dev_loss, disp_error, final_disp_error
     log_file = open(os.path.join(log_directory, 'train_errors_per_epoch_excluding_testset_'+str(args.testset)+'.txt'), 'w')
-    # log_detailed_file format: epoch, batch_index, train_error_for_args.log_interval th_batch
+    # log_detailed_file format: epoch, batch/example_index, train error for that batch/example at that epoch
     log_detailed_file = open(os.path.join(log_directory, 'train_errors_for_every_'+str(args.log_interval)+'th_batch_excluding_testset_'+str(args.testset)+'.txt'), 'w')
 
 

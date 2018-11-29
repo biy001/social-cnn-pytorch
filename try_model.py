@@ -1,31 +1,3 @@
-"""
-Experiments on the model:
-Note 1: max pooling makes performance worse FF.leaky_relu(F.max_pool2d(self.bn1(x), kernel_size = ...)) 
-kernel_size = 2, stride=1, padding = 1, dilation=2 => initial error: 0.08
-kernel_size = 3, stride=1, padding = 1 => initial error: 0.14
-Note 2: adding an extra fc at output doesn't help; adding a 5th conv layer worsens result; increasing conv channels worsens result
-Note 3: a larger dev set portion results in worse train error => more training data could help
-Note 4: dropout doesn't seem to help dev error but could worsen train performance
-Note 5: changing learning rate from 0.001 to 0.0001 or adding learning rate decay doesn't seem to make a difference
-Note 6: Adam is better than SGD
-Note 7: adding batch norm and relu to intermediate fc layer doesn't help
-Note 8: changing relu to leaky_relu improves a lot??? + dev error is much smaller than train error???
-
-Note: best ever train error 0.019 + dev error 0.001 (Epoch 40); (old/typically: train error 0.0526 + dev error 0.0649)
-* current version is the best version *
-"""
-# ---------  things to do: --------
-# things to do:
-# gradient clipping to avoid loss increasing? Currently not increasing but oscillating
-
-# 11/26 possible things to try:
-# look at some resulted trajectories in plot
-# add some other means of regularization other than dropout?
-
-# data augmentation 
-
-# ask TA how to make input consistent in order to apply batches
-# ----------------------------------
 import os
 import torch
 import torch.utils.data
@@ -38,6 +10,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+
+# ---------  things to do: --------
+# things to do:
+# gradient clipping to avoid loss increasing?
+
+# 11/26 possible things to try:
+# look at some resulted trajectories in plot
+# add some other means of regularization other than dropout?
+
+# ask TA how to make input consistent in order to apply batches
+# ----------------------------------
 
 class CNNTrajNet(nn.Module):
 
@@ -83,6 +66,9 @@ class CNNTrajNet(nn.Module):
         input: assume x is input_sequence from one example of (input_sequence, prediction_sequence) 
         x inital size: 1 X 2m X t
         1 is the batch_size, m is the # of pedestrians in that one example, t is the input sequence length
+
+        Note: best ever train error 0.019 + dev error 0.001 (Epoch 40); (old/typically: train error 0.0526 + dev error 0.0649)
+        * current version is the best version *
         """
         x = x.float()
         x = torch.unsqueeze(x, 3)  # 1 X 2m X t_input X 1
@@ -124,9 +110,9 @@ class CNNTrajNet(nn.Module):
         return F.leaky_relu(x)
 
 
-def train(args, model, device, train_loader, optimizer, epoch):
+def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file):
     save_directory = 'save/'
-    with open(os.path.join(save_directory, 'config.pkl'), 'wb') as f:
+    with open(os.path.join(save_directory, 'train_config.pkl'), 'wb') as f:
         pickle.dump(args, f)
     def checkpoint_path(epoch_num):
         return os.path.join(save_directory, 'model_'+str(args.testset)+'_'+str(epoch_num)+'.tar') # careful args.testset is a list..
@@ -134,7 +120,7 @@ def train(args, model, device, train_loader, optimizer, epoch):
     model.train()
     loss_func = nn.MSELoss()
     train_loss = 0
-    losses = []
+    # losses = []
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         target = target.float()
@@ -145,46 +131,53 @@ def train(args, model, device, train_loader, optimizer, epoch):
         loss.backward()
         optimizer.step()
 
-        losses.append(loss.item())
+        # losses.append(loss.item())
         if args.verbose and batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), loss.item()))
+            log_detailed_file.write(str(epoch)+','+str(batch_idx * len(data))+','+str(loss.item())+'\n')
+
     train_loss /= len(train_loader.dataset)
     print('average train loss for Epoch {} is: {:.4f}'.format(epoch, train_loss))
-    print('Saving model')
-    torch.save({
-        'epoch': epoch,
-        'state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict()
-    }, checkpoint_path(epoch))
-    print('model saved')
-    return losses
 
 
-def vali(args, model, device, test_loader):
+    if epoch % args.save_every == 0:
+        print('Saving model')
+        torch.save({
+            'epoch': epoch,
+            'state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict()
+        }, checkpoint_path(epoch))
+        print('model saved')
+
+    return train_loss
+
+
+
+def vali(args, model, device, dev_loader):
     model.eval()
     loss_func = nn.MSELoss()
-    test_loss = 0
+    dev_loss = 0
     disp_error = 0
     fina_disp_error = 0
-    losses = []
+    # losses = []
     with torch.no_grad():
-        for data, target in test_loader:
+        for data, target in dev_loader:
             data, target = data.to(device), target.to(device)
             target = target.float()
             pred = torch.squeeze(model(data), 2) # 1 X 2m X T
-            test_loss += loss_func(pred, target).item() # sum up batch loss
+            dev_loss += loss_func(pred, target).item() # sum up batch loss
             disp_error += displacement_error(reshape_output(pred, mode ='disp'), reshape_output(target, mode ='disp')).item()
             fina_disp_error += final_displacement_error(reshape_output(pred, mode ='f_disp'), reshape_output(target, mode ='f_disp')).item()
-            losses.append(test_loss)
+            # losses.append(dev_loss)
             
-    test_loss /= len(test_loader.dataset)
-    disp_error /= len(test_loader.dataset)
-    fina_disp_error /= len(test_loader.dataset)
+    dev_loss /= len(dev_loader.dataset)
+    disp_error /= len(dev_loader.dataset)
+    fina_disp_error /= len(dev_loader.dataset)
     print('\nDev set: Average loss: {:.4f}, disp error: {:.4f}, final disp error: {:.4f}\n'.format(
-        test_loss, disp_error, fina_disp_error))
-    return losses
+        dev_loss, disp_error, fina_disp_error))
+    return [dev_loss, disp_error, fina_disp_error]
 
 def reshape_output(s, mode ='disp'):
     """
@@ -195,17 +188,30 @@ def reshape_output(s, mode ='disp'):
     - disp: (batch, seq_len, 2) = m X T X 2
     - fina_disp: m X 2
     """
+    # print(s.size())
     s_2D = torch.squeeze(s) # 2m X T  
+    # print(s_2D.size())
+
     s_cluster = torch.split(s, 2, dim=1) # (m X T, m X T, m X T, ...)
+    # print(len(s_cluster))
+
+
     s_stack = torch.stack(s_cluster) # m X 1 X 2 X T
     s_stack = torch.squeeze(s_stack, 1) # m X 2 X T
+    # print(s_stack.size())
+
+
     s_stack_trans = torch.transpose(s_stack, 1, 2) # m X T X 2
+    # print(s_stack_trans.size())
+
+
     if  mode == 'disp':
         return s_stack_trans
     elif mode == 'f_disp':
         return torch.squeeze(torch.split(s_stack_trans, 1, dim=1)[-1], 1)
 
-    
+
+
 def displacement_error(pred_traj, pred_traj_gt, mode='average'):
     """
     Input:  
@@ -257,14 +263,14 @@ def main():
     parser.add_argument('--epochs', type=int, default=100, 
                         help='number of epochs to train (default: 100)')
 
-    parser.add_argument('--dev_ratio', type=int, default=0.1,      # not using dev set for now
-                        help='the ratio of dev set to test set')
+    parser.add_argument('--dev_fraction', type=int, default=0.1,      # not using dev set for now
+                        help='the fraction of dev set')
     parser.add_argument('--testset', type=list, default=[2],     
                         help='test_data_sets (default: [2])')
     parser.add_argument('--forcePreProcess', type=bool, default=False,     
                         help='forcePreProcess (default: False)')
     # Frequency at which the model should be saved parameter
-    parser.add_argument('--save_every', type=int, default=400,      # don't forget
+    parser.add_argument('--save_every', type=int, default=1,      # don't forget
                         help='save frequency')
     # Dropout not implemented.
     # Dropout probability parameter
@@ -294,20 +300,25 @@ def main():
     torch.manual_seed(args.seed)
 
     # Data preprocessor
-    processor = CustomDataPreprocessorForCNN(input_seq_length=args.input_size, pred_seq_length=args.output_size, test_data_sets = args.testset, dev_ratio_to_test_set = args.dev_ratio, forcePreProcess=args.forcePreProcess)
+    processor = CustomDataPreprocessorForCNN(input_seq_length=args.input_size, pred_seq_length=args.output_size, test_data_sets = args.testset, dev_fraction = args.dev_fraction, forcePreProcess=args.forcePreProcess)
     # Processed datasets. (training/dev/test)
-    print("Loading data from the pickle files. This may take a while...")
     train_set = CustomDatasetForCNN(processor.processed_train_data_file)
     dev_set = CustomDatasetForCNN(processor.processed_dev_data_file)
-    test_set = CustomDatasetForCNN(processor.processed_test_data_file)
+    test_set = CustomDatasetForCNN(processor.processed_dev_data_file)
     # Use DataLoader object to load data. Note batch_size=1 is necessary since each datum has different rows (i.e. number of pedestrians).
     train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=args.batch_size, shuffle=True)
     dev_loader = torch.utils.data.DataLoader(dataset=dev_set, batch_size=args.batch_size, shuffle=True)
     test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=True)
-    print("Training set size: {}".format(len(train_loader)))
-    print("Dev set size: {}".format(len(dev_loader)))
-    print("Test set size: {}".format(len(test_loader)))
-   
+    
+    # ---------  leave room for a resume option--------
+    # add a resume option to continue training from a existing presaved model
+    # ----------------------------------
+    log_directory = 'log/'   # log_file format: epoch, average_train_loss, dev_loss, disp_error, final_disp_error
+    log_file = open(os.path.join(log_directory, 'train_errors_per_epoch_excluding_testset_'+str(args.testset)+'.txt'), 'w')
+    # log_detailed_file format: epoch, batch_index, train_error_for_args.log_interval th_batch
+    log_detailed_file = open(os.path.join(log_directory, 'train_errors_for_every_'+str(args.log_interval)+'th_batch_excluding_testset_'+str(args.testset)+'.txt'), 'w')
+
+
     device = torch.device("cuda" if use_cuda else "cpu")
     model = CNNTrajNet(args).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr = args.learning_rate, weight_decay=args.lambda_param)
@@ -315,9 +326,13 @@ def main():
 
     for epoch in range(1, args.epochs + 1):
         # adjust_learning_rate(optimizer, epoch, args.lr_decay_rate, args.learning_rate)
-        train_losses = train(args, model, device, train_loader, optimizer, epoch)   #--------- use losses to graph? ---------
-        dev_losses = vali(args, model, device, dev_loader)       
+        train_losses = train(args, model, device, train_loader, optimizer, epoch, log_detailed_file)   #--------- use losses to graph? ---------
+        log_file.write(str(epoch)+','+str(train_losses)+',')
+
+        dev_losses = vali(args, model, device, dev_loader)      
+        log_file.write(str(dev_losses[0])+','+str(dev_losses[1])+','+str(dev_losses[2])+'\n')
         print('finish epoch {}'.format(epoch))                    
+    log_detailed_file.close()
 
 
 

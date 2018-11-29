@@ -91,7 +91,7 @@ def main():
 
     # Test data loading
     processor = CustomDataPreprocessorForCNN(input_seq_length=saved_args.input_size, pred_seq_length=saved_args.output_size, test_data_sets = saved_args.testset, dev_fraction = saved_args.dev_fraction, forcePreProcess=saved_args.forcePreProcess)
-    test_set = CustomDatasetForCNN(processor.processed_dev_data_file)
+    test_set = CustomDatasetForCNN(processor.processed_test_data_file)
     test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=saved_args.batch_size, shuffle=True)
 
     test_losses = test(saved_args, model, device, test_loader)    # didn't use test_losses for anything for now

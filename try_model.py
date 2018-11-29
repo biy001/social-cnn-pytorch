@@ -1,3 +1,30 @@
+"""
+Experiments on the model:
+Note 1: max pooling makes performance worse FF.leaky_relu(F.max_pool2d(self.bn1(x), kernel_size = ...)) 
+kernel_size = 2, stride=1, padding = 1, dilation=2 => initial error: 0.08
+kernel_size = 3, stride=1, padding = 1 => initial error: 0.14
+Note 2: adding an extra fc at output doesn't help; adding a 5th conv layer worsens result; increasing conv channels worsens result
+Note 3: a larger dev set portion results in worse train error => more training data could help
+Note 4: dropout doesn't seem to help dev error but could worsen train performance
+Note 5: changing learning rate from 0.001 to 0.0001 or adding learning rate decay doesn't seem to make a difference
+Note 6: Adam is better than SGD
+Note 7: adding batch norm and relu to intermediate fc layer doesn't help
+Note 8: changing relu to leaky_relu improves a lot??? + dev error is much smaller than train error???
+Note: best ever train error 0.019 + dev error 0.001 (Epoch 40); (old/typically: train error 0.0526 + dev error 0.0649)
+* current version is the best version *
+"""
+# ---------  things to do: --------
+# things to do:
+# gradient clipping to avoid loss increasing? Currently not increasing but oscillating
+
+# 11/26 possible things to try:
+# look at some resulted trajectories in plot
+# add some other means of regularization other than dropout?
+
+# data augmentation 
+
+# ask TA how to make input consistent in order to apply batches
+# ----------------------------------
 import os
 import torch
 import torch.utils.data
@@ -10,17 +37,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-
-# ---------  things to do: --------
-# things to do:
-# gradient clipping to avoid loss increasing?
-
-# 11/26 possible things to try:
-# look at some resulted trajectories in plot
-# add some other means of regularization other than dropout?
-
-# ask TA how to make input consistent in order to apply batches
-# ----------------------------------
 
 class CNNTrajNet(nn.Module):
 
@@ -66,9 +82,6 @@ class CNNTrajNet(nn.Module):
         input: assume x is input_sequence from one example of (input_sequence, prediction_sequence) 
         x inital size: 1 X 2m X t
         1 is the batch_size, m is the # of pedestrians in that one example, t is the input sequence length
-
-        Note: best ever train error 0.019 + dev error 0.001 (Epoch 40); (old/typically: train error 0.0526 + dev error 0.0649)
-        * current version is the best version *
         """
         x = x.float()
         x = torch.unsqueeze(x, 3)  # 1 X 2m X t_input X 1
@@ -190,20 +203,10 @@ def reshape_output(s, mode ='disp'):
     """
     # print(s.size())
     s_2D = torch.squeeze(s) # 2m X T  
-    # print(s_2D.size())
-
     s_cluster = torch.split(s, 2, dim=1) # (m X T, m X T, m X T, ...)
-    # print(len(s_cluster))
-
-
     s_stack = torch.stack(s_cluster) # m X 1 X 2 X T
     s_stack = torch.squeeze(s_stack, 1) # m X 2 X T
-    # print(s_stack.size())
-
-
     s_stack_trans = torch.transpose(s_stack, 1, 2) # m X T X 2
-    # print(s_stack_trans.size())
-
 
     if  mode == 'disp':
         return s_stack_trans
@@ -241,7 +244,6 @@ def final_displacement_error(pred_pos, pred_pos_gt):
     Output:
     - loss: gives the eculidian displacement error
     """
-    # print(pred_pos.size())
     m, _ = pred_pos.size()
     loss = (pred_pos_gt - pred_pos)**2
     loss = torch.sqrt(loss.sum(dim=1)) # m
@@ -263,8 +265,8 @@ def main():
     parser.add_argument('--epochs', type=int, default=100, 
                         help='number of epochs to train (default: 100)')
 
-    parser.add_argument('--dev_fraction', type=int, default=0.1,      # not using dev set for now
-                        help='the fraction of dev set')
+    parser.add_argument('--dev_ratio', type=int, default=0.1,      # not using dev set for now
+                        help='the ratio of dev set to test set')
     parser.add_argument('--testset', type=list, default=[2],     
                         help='test_data_sets (default: [2])')
     parser.add_argument('--forcePreProcess', type=bool, default=False,     
@@ -300,15 +302,20 @@ def main():
     torch.manual_seed(args.seed)
 
     # Data preprocessor
-    processor = CustomDataPreprocessorForCNN(input_seq_length=args.input_size, pred_seq_length=args.output_size, test_data_sets = args.testset, dev_fraction = args.dev_fraction, forcePreProcess=args.forcePreProcess)
+    processor = CustomDataPreprocessorForCNN(input_seq_length=args.input_size, pred_seq_length=args.output_size, test_data_sets = args.testset, dev_ratio_to_test_set = args.dev_ratio, forcePreProcess=args.forcePreProcess)
     # Processed datasets. (training/dev/test)
+    print("Loading data from the pickle files. This may take a while...")
     train_set = CustomDatasetForCNN(processor.processed_train_data_file)
     dev_set = CustomDatasetForCNN(processor.processed_dev_data_file)
-    test_set = CustomDatasetForCNN(processor.processed_dev_data_file)
+    test_set = CustomDatasetForCNN(processor.processed_test_data_file)
     # Use DataLoader object to load data. Note batch_size=1 is necessary since each datum has different rows (i.e. number of pedestrians).
     train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=args.batch_size, shuffle=True)
     dev_loader = torch.utils.data.DataLoader(dataset=dev_set, batch_size=args.batch_size, shuffle=True)
     test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=True)
+
+    print("Training set size: {}".format(len(train_loader)))
+    print("Dev set size: {}".format(len(dev_loader)))
+    print("Test set size: {}".format(len(test_loader)))
     
     # ---------  leave room for a resume option--------
     # add a resume option to continue training from a existing presaved model
@@ -329,9 +336,10 @@ def main():
         train_losses = train(args, model, device, train_loader, optimizer, epoch, log_detailed_file)   #--------- use losses to graph? ---------
         log_file.write(str(epoch)+','+str(train_losses)+',')
 
-        dev_losses = vali(args, model, device, dev_loader)      
+        dev_losses = vali(args, model, device, dev_loader)     
         log_file.write(str(dev_losses[0])+','+str(dev_losses[1])+','+str(dev_losses[2])+'\n')
         print('finish epoch {}'.format(epoch))                    
+    log_file.close()
     log_detailed_file.close()
 
 

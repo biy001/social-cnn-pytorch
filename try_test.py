@@ -90,7 +90,7 @@ def main():
         sys.exit('Execution stopped: model for test set '+str(saved_args.testset)+', epoch '+str(test_args.epoch_num)+' does not exist for loading')
 
     # Test data loading
-    processor = CustomDataPreprocessorForCNN(input_seq_length=saved_args.input_size, pred_seq_length=saved_args.output_size, test_data_sets = saved_args.testset, dev_fraction = saved_args.dev_fraction, forcePreProcess=saved_args.forcePreProcess)
+    processor = CustomDataPreprocessorForCNN(input_seq_length=saved_args.input_size, pred_seq_length=saved_args.output_size, test_data_sets = saved_args.testset, dev_ratio_to_test_set = saved_args.dev_ratio, forcePreProcess=saved_args.forcePreProcess)
     test_set = CustomDatasetForCNN(processor.processed_test_data_file)
     test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=saved_args.batch_size, shuffle=True)
 

@@ -68,7 +68,7 @@ def main():
     test_args = parser.parse_args()
     
     save_directory = 'save/'
-    with open(os.path.join(save_directory, 'config.pkl'), 'rb') as f:
+    with open(os.path.join(save_directory, 'train_config.pkl'), 'rb') as f:
         saved_args = pickle.load(f)
 
     use_cuda = not saved_args.no_cuda and torch.cuda.is_available()

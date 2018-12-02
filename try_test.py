@@ -5,13 +5,15 @@ import torch.utils.data
 import pickle
 import numpy as np
 import random
+import time
+import timeit
 import argparse
 from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-from try_model import CNNTrajNet, reshape_output, displacement_error, final_displacement_error
+from try_model import CNNTrajNet, reshape_output, displacement_error, final_displacement_error, time_elapsed
 
 # test_log_file format: example #, test_loss, disp_error, fina_disp_error
 # Note: last row is the average loss
@@ -64,8 +66,10 @@ def main():
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch CNNTrajNet')
     parser.add_argument('--epoch_num', type=int, default=100, 
-                        help='number of epochs to train (default: 100)')
+                        help='number of epochs to train')
     test_args = parser.parse_args()
+
+    start = time.time()
     
     save_directory = 'save/'
     with open(os.path.join(save_directory, 'train_config.pkl'), 'rb') as f:
@@ -95,6 +99,11 @@ def main():
     test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=saved_args.batch_size, shuffle=True)
 
     test_losses = test(saved_args, model, device, test_loader)    # didn't use test_losses for anything for now
+    elapsed_time = time.time() - start
+    if elapsed_time < 1.0:
+        print('Time elapsed less than a second')
+    else:
+        print('Time elapsed: {}'.format(time_elapsed(elapsed_time)))
 
    
 

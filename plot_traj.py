@@ -10,12 +10,12 @@ import matplotlib.pyplot as plt
 # test_results.pkl format: input, target and pred pair in a tuple: [(2m X T, 2m X T, 2m X T), (2m X T, 2m X T, 2m X T),...]
 
 
-def plot_traj(args, test_traj):
+def plot_traj(args, saved_args, test_traj):
 	print('Number of examples in test set: {}'.format(len(test_traj)))
 	try:
 		one_example = test_traj[args.example_num] # (2m X T, 2m X T)
 	except:
-		sys.exit('Execution stopped: Test set '+str(saved_args.testset)+ ' does not contain Example '+str(exam_n)+'. Please choose another example.')
+		sys.exit('Execution stopped: Test set '+str(saved_args.testset)+ ' does not contain Example '+str(args.example_num)+'. Please choose another example.')
 
 	m = int(one_example[0].shape[0]/2) # pedestrian number
 
@@ -65,15 +65,10 @@ def main():
 
 	test_log_filename = 'log/test_results_wi_testset_'+str(saved_args.testset)+'.pkl'
 	test_traj = pickle.load(open(test_log_filename, "rb" ) )
-	plot_traj(plot_traj_args, test_traj)
+	plot_traj(plot_traj_args, saved_args, test_traj)
 
 
 
 if __name__ == '__main__':
 	main()
-
-
-
-
-
 

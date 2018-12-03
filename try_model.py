@@ -265,7 +265,7 @@ def main():
     parser.add_argument('--epochs', type=int, default=100, 
                         help='number of epochs to train (default: 100)')
 
-    parser.add_argument('--dev_ratio', type=int, default=0.1,      # not using dev set for now
+    parser.add_argument('--dev_ratio', type=float, default=0.1,      # not using dev set for now
                         help='the ratio of dev set to test set')
     parser.add_argument('--testset', type=list, default=[2],     
                         help='test_data_sets (default: [2])')

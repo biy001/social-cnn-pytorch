@@ -5,10 +5,11 @@ import pickle
 import numpy as np
 import random
 
+
 from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 
 # Data preprocessor.
-processor = CustomDataPreprocessorForCNN(test_data_sets = [2], dev_ratio_to_test_set = 0.1, forcePreProcess=False)
+processor = CustomDataPreprocessorForCNN(test_data_sets = [2], dev_ratio_to_test_set = 0.1, forcePreProcess=True)
 
 # Processed datasets. (training/dev/test)
 train_set = CustomDatasetForCNN(processor.processed_train_data_file)

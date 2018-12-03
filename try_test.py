@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-from try_model_2 import CNNTrajNet, reshape_output, displacement_error, final_displacement_error
+from try_model import CNNTrajNet, reshape_output, displacement_error, final_displacement_error
 
 # test_log_file format: example #, test_loss, disp_error, fina_disp_error
 # Note: last row is the average loss

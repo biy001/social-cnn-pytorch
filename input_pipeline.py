@@ -4,6 +4,7 @@ import torch.utils.data
 import pickle
 import numpy as np
 import random
+from tqdm import tqdm
 
 # -------------- Question 11/20 ---------------- #
 # 1. test set hasn't been set up
@@ -80,6 +81,9 @@ class CustomDataPreprocessorForCNN():
         # Validation arguments
         self.dev_fraction = dev_ratio_to_test_set
         
+        # Buffer for storing processed data.
+        self.processed_input_output_pairs = []
+        
         # Define the path in which the process data would be stored
         self.processed_train_data_file = os.path.join(self.data_dir, "trajectories_cnn_train.cpkl")
         self.processed_dev_data_file = os.path.join(self.data_dir, "trajectories_cnn_dev.cpkl")
@@ -87,20 +91,16 @@ class CustomDataPreprocessorForCNN():
         
         # If the file doesn't exist or forcePreProcess is true
         if not(os.path.exists(self.processed_train_data_file)) or forcePreProcess:
-            print("------ Creating pre-processed training data for CNN ------")
+            print("============ Creating pre-processed training data for CNN ============")
             self.preprocess(self.train_data_dirs, self.processed_train_data_file)
         if not(os.path.exists(self.processed_dev_data_file)) or not(os.path.exists(self.processed_test_data_file)) or forcePreProcess:
-            print("------ Creating pre-processed dev & test data for CNN ------")
+            print("============ Creating pre-processed dev & test data for CNN ============")
             self.preprocess(self.test_data_dirs, self.processed_test_data_file, self.dev_fraction, self.processed_dev_data_file)
         
     def preprocess(self, data_dirs, data_file, dev_fraction = 0., data_file_2 = None):
-        #frameList_data = []
-        #pedsInFrameList_data = []
-        #pedsPosInFrameList_data = []
-        processed_input_output_pairs = []
-        
+        random.seed(1) # Random seed for pedestrian permutation and data shuffling
         for directory in data_dirs:
-            print('------ Processing dataset ' + str(directory) + ' ------')
+            print('--> Processing dataset ' + str(directory))
             # define path of the csv file of the current dataset
             file_path = os.path.join(directory, 'world_pos_normalized.csv')
             
@@ -111,8 +111,8 @@ class CustomDataPreprocessorForCNN():
             frameList = np.unique(data[0, :]).tolist()
             numFrames = len(frameList)
             
-            # Add the list of frameIDs to the frameList_data
-            #frameList_data.append(frameList)
+            # Frame ID increment for this dataset.
+            frame_increment = np.min(np.array(frameList[1:-1]) - np.array(frameList[0:-2]))
             
             # For this dataset check which pedestrians exist in each frame.
             pedsInFrameList = []
@@ -129,95 +129,141 @@ class CustomDataPreprocessorForCNN():
                     current_x = pedsInFrame[2, pedsInFrame[1, :] == ped][0]
                     current_y = pedsInFrame[3, pedsInFrame[1, :] == ped][0]
                     pedsPos.extend([current_x, current_y])
+                    if (current_x == 0.0 and current_y == 0.0):
+                        print('[WARNING] There exists a pedestrian at coordinate [0.0, 0.0]')
                 pedsPosInFrameList.append(pedsPos)
             
             # Go over the frames in this data again to extract data.
-            ind = 0  # frame index
-            while ind < len(frameList) - (self.input_seq_length + self.pred_seq_length - 1):
-                # List of pedestrians in this frame.
-                pedsList = pedsInFrameList[ind]
-                # Check if same pedestrians exist in the next (input_seq_length + pred_seq_length - 1) frames.
-                peds_contained = True
-                for ii in range(self.input_seq_length + self.pred_seq_length):
-                    if pedsInFrameList[ind + ii] != pedsList:
-                        peds_contained = False
-                if peds_contained:
-                    print(str(int(self.input_seq_length + self.pred_seq_length)) + ' frames starting from Frame ' + str(int(frameList[ind])) +  ' contain pedestrians ' + str(pedsList))
-                    # Initialize numpy arrays for input-output pair
-                    data_input = np.zeros((2*len(pedsList), self.input_seq_length))
-                    data_output = np.zeros((2*len(pedsList), self.pred_seq_length))
-                    for ii in range(self.input_seq_length):
-                        data_input[:, ii] = np.array(pedsPosInFrameList[ind + ii])
-                    for jj in range(self.pred_seq_length):
-                        data_output[:, jj] = np.array(pedsPosInFrameList[ind + (self.input_seq_length - 1) + jj])
-                    processed_pair = (torch.from_numpy(data_input), torch.from_numpy(data_output))
-                    processed_input_output_pairs.append(processed_pair)
-                    
-                    # Perform data augmentation. Rotate (x,y)-coordinates from 5 deg to 355 deg with 5 deg space, and flip y. The amount of data is x144 the original data.
-                    # # First, flip the original data.
-                    data_input_yflipped = np.zeros_like(data_input)
-                    data_output_yflipped = np.zeros_like(data_output)
-                    for kk in range(len(pedsList)):
-                        data_input_yflipped[2*kk, :] = data_input[2*kk, :]
-                        data_input_yflipped[2*kk+1, :] = -1*data_input[2*kk+1, :]
-                        data_output_yflipped[2*kk, :] = data_output[2*kk, :]
-                        data_output_yflipped[2*kk+1, :] = -1*data_output[2*kk+1, :]
-                    processed_pair_yflipped = (torch.from_numpy(data_input_yflipped), torch.from_numpy(data_output_yflipped))
-                    processed_input_output_pairs.append(processed_pair_yflipped)
-                    # # Then rotate by 5 deg sequentially and also flip for each rotated data
-                    for deg in range(5, 360, 5):
-                        data_input_rotated = np.zeros_like(data_input)
-                        data_input_rotated_yflipped = np.zeros_like(data_input)
-                        data_output_rotated = np.zeros_like(data_output)
-                        data_output_rotated_yflipped = np.zeros_like(data_output)
-                        rad = np.radians(deg)
-                        c, s = np.cos(rad), np.sin(rad)
-                        Rot = np.array(((c,-s), (s, c)))
-                        for ii in range(len(pedsList)):
-                            for jj in range(self.input_seq_length):
-                                coordinates_for_this_ped = data_input[2*ii:2*(ii+1), jj]
-                                new_coordinates_for_this_ped = np.dot(Rot, coordinates_for_this_ped)
-                                data_input_rotated[2*ii:2*(ii+1), jj] = new_coordinates_for_this_ped
-                            data_input_rotated_yflipped[2*ii, :] = data_input_rotated[2*ii, :]    
-                            data_input_rotated_yflipped[2*ii+1, :] = -1*data_input_rotated[2*ii+1, :]
-                            for jj in range(self.pred_seq_length):
-                                coordinates_for_this_ped = data_output[2*ii:2*(ii+1), jj]
-                                new_coordinates_for_this_ped = np.dot(Rot, coordinates_for_this_ped)
-                                data_output_rotated[2*ii:2*(ii+1), jj] = new_coordinates_for_this_ped
-                            data_output_rotated_yflipped[2*ii, :] = data_output_rotated[2*ii, :]
-                            data_output_rotated_yflipped[2*ii+1, :] = -1*data_output_rotated[2*ii+1, :]
-                        processed_pair_rotated = (torch.from_numpy(data_input_rotated), torch.from_numpy(data_output_rotated))
-                        processed_input_output_pairs.append(processed_pair_rotated)   
-                        processed_pair_rotated_yflipped = (torch.from_numpy(data_input_rotated_yflipped), torch.from_numpy(data_output_rotated_yflipped))
-                        processed_input_output_pairs.append(processed_pair_rotated_yflipped)
-                        
-                    ind += self.input_seq_length +  self.pred_seq_length - 1
-                else:
+            ind = 0
+            
+            while ind < len(frameList) - (self.input_seq_length + self.pred_seq_length):
+                 # Check if this sequence contains consecutive frames. Otherwise skip this sequence.
+                if not frameList[ind + self.input_seq_length + self.pred_seq_length] - frameList[ind] == (self.input_seq_length + self.pred_seq_length)*frame_increment:
                     ind += 1
+                    continue;
+                # List of pedestirans in this sequence.
+                pedsList = np.unique(np.concatenate(pedsInFrameList[ind : ind + self.input_seq_length + self.pred_seq_length])).tolist()
+                # Print the Frame numbers and pedestrian IDs in this sequence for sanity check.
+                # print(str(int(self.input_seq_length + self.pred_seq_length)) + ' frames starting from Frame ' + str(int(frameList[ind])) +  ' contain pedestrians ' + str(pedsList))
+                # Initialize numpy arrays for input-output pair
+                data_input = np.zeros((2*len(pedsList), self.input_seq_length))
+                data_output = np.zeros((2*len(pedsList), self.pred_seq_length))
+                for ii in range(self.input_seq_length):
+                    for jj in range(len(pedsList)):
+                        if pedsList[jj] in pedsInFrameList[ind + ii]:
+                            datum_index = pedsInFrameList[ind + ii].index(pedsList[jj])
+                            data_input[2*jj:2*(jj + 1), ii] = np.array(pedsPosInFrameList[ind + ii][2*datum_index:2*(datum_index + 1)])
+                for ii in range(self.pred_seq_length):
+                    for jj in range(len(pedsList)):
+                        if pedsList[jj] in pedsInFrameList[ind + self.input_seq_length + ii]:
+                            datum_index = pedsInFrameList[ind + self.input_seq_length + ii].index(pedsList[jj])
+                            data_output[2*jj:2*(jj + 1), ii] = np.array(pedsPosInFrameList[ind + self.input_seq_length + ii][2*datum_index:2*(datum_index + 1)])
+                processed_pair = (torch.from_numpy(data_input), torch.from_numpy(data_output))
+                self.processed_input_output_pairs.append(processed_pair)
                 
-            #pedsInFrameList_data.append(pedsInFrameList)
-            #pedsPosInFrameList_data.append(pedsPosInFrameList)
+                ind += self.input_seq_length + self.pred_seq_length
+        print('--> Original Data Size: ' + str(len(self.processed_input_output_pairs)))   
+        # Perform data augmentation
+        self.augment_rotate()
+        self.augment_flip()
+        self.augment_permute()
             
         # Shuffle data, possibly divide into train and dev sets.
-        random.seed(1)
-        random.shuffle(processed_input_output_pairs)
+        print('--> Shuffling all data before saving')
+        random.shuffle(self.processed_input_output_pairs)
         if dev_fraction != 0.:
             assert(data_file_2 != None)
-            dev_size = int(len(processed_input_output_pairs)*dev_fraction)
-            processed_dev_set = processed_input_output_pairs[:dev_size]
-            processed_test_set = processed_input_output_pairs[dev_size:]
+            dev_size = int(len(self.processed_input_output_pairs)*dev_fraction)
+            processed_dev_set = self.processed_input_output_pairs[:dev_size]
+            processed_test_set = self.processed_input_output_pairs[dev_size:]
             # Save processed data.
             f = open(data_file, 'wb')
+            print('--> Dumping test data to pickle file')
             pickle.dump(processed_test_set, f, protocol=2)
             f.close()
             f2 = open(data_file_2, 'wb')
+            print('--> Dumping dev data to pickle file')
             pickle.dump(processed_dev_set, f2, protocol=2)
             f2.close()
+            # Clear buffer
+            self.processed_input_output_pairs = []
         else:
             # Save processed data.
             f = open(data_file, 'wb')
-            pickle.dump(processed_input_output_pairs, f, protocol=2)
+            print('--> Dumping training data to pickle file')
+            pickle.dump(self.processed_input_output_pairs, f, protocol=2)
             f.close()
+            # Clear buffer
+            self.processed_input_output_pairs = []
+    
+    def augment_rotate(self):
+        deg_increment_int = 30
+        print('--> Data Augmentation 1: Coordinate Rotation (' + str(deg_increment_int) +' deg increment)')
+        augmented_input_output_pairs = []
+        for processed_input_output_pair in tqdm(self.processed_input_output_pairs):
+            data_input, data_output = processed_input_output_pair[0].numpy(), processed_input_output_pair[1].numpy()
+            num_peds = int(data_input.shape[0]/2)
+            # Rotate by deg_increment deg sequentially
+            for deg in range(deg_increment_int, 360, deg_increment_int):
+                data_input_rotated = np.zeros_like(data_input)
+                data_output_rotated = np.zeros_like(data_output)
+                rad = np.radians(deg)
+                c, s = np.cos(rad), np.sin(rad)
+                Rot = np.array(((c,-s), (s, c)))
+                for ii in range(num_peds):
+                    for jj in range(self.input_seq_length):
+                        coordinates_for_this_ped = data_input[2*ii:2*(ii+1), jj]
+                        new_coordinates_for_this_ped = np.dot(Rot, coordinates_for_this_ped)
+                        data_input_rotated[2*ii:2*(ii+1), jj] = new_coordinates_for_this_ped
+                    for jj in range(self.pred_seq_length):
+                        coordinates_for_this_ped = data_output[2*ii:2*(ii+1), jj]
+                        new_coordinates_for_this_ped = np.dot(Rot, coordinates_for_this_ped)
+                        data_output_rotated[2*ii:2*(ii+1), jj] = new_coordinates_for_this_ped
+                processed_pair_rotated = (torch.from_numpy(data_input_rotated), torch.from_numpy(data_output_rotated))
+                augmented_input_output_pairs.append(processed_pair_rotated)
+        self.processed_input_output_pairs.extend(augmented_input_output_pairs)
+        print('--> Augmented Data Size: ' + str(len(self.processed_input_output_pairs)))
+    
+    def augment_flip(self):
+        print('--> Data Augmentation 2: Y Flip')
+        augmented_input_output_pairs = []
+        for processed_input_output_pair in tqdm(self.processed_input_output_pairs):
+            data_input, data_output = processed_input_output_pair[0].numpy(), processed_input_output_pair[1].numpy()
+            num_peds = int(data_input.shape[0]/2)
+            # Flip y
+            data_input_yflipped = np.zeros_like(data_input)
+            data_output_yflipped = np.zeros_like(data_output)
+            for kk in range(num_peds):
+                data_input_yflipped[2*kk, :] = data_input[2*kk, :]
+                data_input_yflipped[2*kk+1, :] = -1*data_input[2*kk+1, :]
+                data_output_yflipped[2*kk, :] = data_output[2*kk, :]
+                data_output_yflipped[2*kk+1, :] = -1*data_output[2*kk+1, :]
+            processed_pair_yflipped = (torch.from_numpy(data_input_yflipped), torch.from_numpy(data_output_yflipped))
+            augmented_input_output_pairs.append(processed_pair_yflipped)
+        self.processed_input_output_pairs.extend(augmented_input_output_pairs)
+        print('--> Augmented Data Size: ' + str(len(self.processed_input_output_pairs)))
+        
+    def augment_permute(self):
+        # Specify how many pedestrian permutations to consider per input-output pair
+        num_perms = 4
+        print('--> Data Augmentation 3: Pedestrian Permutation (' + str(num_perms) + ' random permutations per input-output pair)')
+        augmented_input_output_pairs = []
+        for processed_input_output_pair in tqdm(self.processed_input_output_pairs):
+            data_input, data_output = processed_input_output_pair[0].numpy(), processed_input_output_pair[1].numpy()
+            num_peds = int(data_input.shape[0]/2)
+            for ii in range(num_perms):
+                perm = np.random.permutation(num_peds)
+                data_input_permuted = np.zeros_like(data_input)
+                data_output_permuted = np.zeros_like(data_output)
+                for jj in range(len(perm)):
+                    data_input_permuted[2*jj:2*(jj+1), :] = data_input[2*perm[jj]:2*(perm[jj]+1), :]
+                    data_output_permuted[2*jj:2*(jj+1), :] = data_output[2*perm[jj]:2*(perm[jj]+1), :]
+                processed_pair_permuted = (torch.from_numpy(data_input_permuted), torch.from_numpy(data_output_permuted))
+                augmented_input_output_pairs.append(processed_pair_permuted)
+        self.processed_input_output_pairs.extend(augmented_input_output_pairs)
+        print('--> Augmented Data Size: ' + str(len(self.processed_input_output_pairs)))
+                    
+                    
 
 class CustomDatasetForCNN(torch.utils.data.Dataset):
     def __init__(self, file_path):

@@ -39,7 +39,7 @@ def test(args, model, device, test_loader):
             data, target = data.to(device), target.to(device)
             target = target.float()
             pred = torch.squeeze(model(data), 2) # 1 X 2m X T
-            target_pred_pair_list.append((torch.squeeze(target).cpu().numpy(), torch.squeeze(pred).cpu().numpy())) # 2m X T, save target and pred pair
+            pred_target_pair_list.append((torch.squeeze(target).cpu().numpy(), torch.squeeze(pred).cpu().numpy())) # 2m X T, save target and pred pair
 
             current_test_loss = loss_func(pred, target).item() # sum up batch loss
             current_disp_error = displacement_error(reshape_output(pred, mode ='disp'), reshape_output(target, mode ='disp')).item()
@@ -57,7 +57,7 @@ def test(args, model, device, test_loader):
     print('\nTest set: Average loss: {:.4f}, disp error: {:.4f}, final disp error: {:.4f}\n'.format(
         test_loss, disp_error, fina_disp_error))
     with open(os.path.join(test_log_directory, 'test_results_wi_testset_'+str(args.testset)+'.pkl'), 'wb') as f: # format: [(2m X T, 2m X T), (2m X T, 2m X T),...]
-        pickle.dump(target_pred_pair_list, f)
+        pickle.dump(pred_target_pair_list, f)
     test_log_file.close()
     return [test_loss, disp_error, fina_disp_error]
 

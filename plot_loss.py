@@ -9,7 +9,8 @@ import matplotlib.pyplot as plt
 # test_results.pkl format: target and pred pair in a tuple: [(2m X T, 2m X T), (2m X T, 2m X T),...]
 
 # loss_file_name = 'try_copy.txt'
-loss_file_name = 'train_errors_per_epoch_excluding_testset_2.txt'
+loss_folder = 'log/'
+loss_file_name = loss_folder + 'train_errors_per_epoch_excluding_testset_[2].txt'
 
 
 all_loss = np.loadtxt(loss_file_name, delimiter=',')

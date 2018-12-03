@@ -133,31 +133,7 @@ class CustomDataPreprocessorForCNN():
                         print('[WARNING] There exists a pedestrian at coordinate [0.0, 0.0]')
                 pedsPosInFrameList.append(pedsPos)
 
-            # Go over the frames in this data again to extract data.
-            ind = 0  # frame index
-            while ind < len(frameList) - (self.input_seq_length + self.pred_seq_length):
-                # List of pedestrians in this frame.
-                pedsList = pedsInFrameList[ind]
-                # Check if same pedestrians exist in the next (input_seq_length + pred_seq_length - 1) frames.
-                peds_contained = True
-                for ii in range(self.input_seq_length + self.pred_seq_length):
-                    if pedsInFrameList[ind + ii] != pedsList:
-                        peds_contained = False
-                if peds_contained:
-                    #print(str(int(self.input_seq_length + self.pred_seq_length)) + ' frames starting from Frame ' + str(int(frameList[ind])) +  ' contain pedestrians ' + str(pedsList))
-                    # Initialize numpy arrays for input-output pair
-                    data_input = np.zeros((2*len(pedsList), self.input_seq_length))
-                    data_output = np.zeros((2*len(pedsList), self.pred_seq_length))
-                    for ii in range(self.input_seq_length):
-                        data_input[:, ii] = np.array(pedsPosInFrameList[ind + ii])
-                    for jj in range(self.pred_seq_length):
-                        data_output[:, jj] = np.array(pedsPosInFrameList[ind + self.input_seq_length + jj])
-                    processed_pair = (torch.from_numpy(data_input), torch.from_numpy(data_output))
-                    self.processed_input_output_pairs.append(processed_pair)
-                    ind += self.input_seq_length +  self.pred_seq_length
-                else:
-                    ind += 1
-            '''
+            
             # Go over the frames in this data again to extract data.
             ind = 0
             
@@ -186,8 +162,8 @@ class CustomDataPreprocessorForCNN():
                 processed_pair = (torch.from_numpy(data_input), torch.from_numpy(data_output))
                 self.processed_input_output_pairs.append(processed_pair)
                 ind += self.input_seq_length + self.pred_seq_length
-             '''
-        print('--> Original Data Size: ' + str(len(self.processed_input_output_pairs)))
+             
+        print('--> Original Data Size: ' + str(len(self.processed_input_output_pairs)))   
         # Perform data augmentation
         answer = None
         while answer not in ('y', 'n'):
@@ -200,7 +176,7 @@ class CustomDataPreprocessorForCNN():
                 print('--> Skipping data augmentation')
             else:
                 print('Please enter y or n')
-        
+            
         # Shuffle data, possibly divide into train and dev sets.
         print('--> Shuffling all data before saving')
         random.shuffle(self.processed_input_output_pairs)

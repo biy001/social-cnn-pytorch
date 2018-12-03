@@ -10,20 +10,11 @@ Note 5: changing learning rate from 0.001 to 0.0001 or adding learning rate deca
 Note 6: Adam is better than SGD
 Note 7: adding batch norm and relu to intermediate fc layer doesn't help
 Note 8: changing relu to leaky_relu improves a lot??? + dev error is much smaller than train error???
-Note: best ever train error 0.019 + dev error 0.001 (Epoch 40); (old/typically: train error 0.0526 + dev error 0.0649)
 * current version is the best version *
 """
 # ---------  things to do: --------
-# things to do:
-# gradient clipping to avoid loss increasing? Currently not increasing but oscillating
-
 # 11/26 possible things to try:
 # look at some resulted trajectories in plot
-# add some other means of regularization other than dropout?
-
-# data augmentation 
-
-# ask TA how to make input consistent in order to apply batches
 # ----------------------------------
 import os
 import torch
@@ -31,6 +22,8 @@ import torch.utils.data
 import pickle
 import numpy as np
 import random
+import time
+import timeit
 import argparse
 from torch.autograd import Variable
 import torch.nn as nn
@@ -254,6 +247,13 @@ def adjust_learning_rate(optimizer, epoch, decay_rate, original_lr):
     for param_group in optimizer.param_groups:
         param_group['lr'] = 1./(1+decay_rate*epoch)*original_lr
 
+def time_elapsed(elapsed_seconds):
+    seconds = int(elapsed_seconds)
+    minutes, seconds = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    periods = [('hours', hours), ('minutes', minutes), ('seconds', seconds)]
+    return  ', '.join('{} {}'.format(value, name) for name, value in periods if value)
+
 
 def main():
     # Training settings
@@ -296,6 +296,8 @@ def main():
                         help='how many batches to wait before logging training status')
     parser.add_argument('--verbose', type=bool, default=True,     
                         help='printing log')
+
+    start = time.time()
     
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -338,7 +340,7 @@ def main():
 
         dev_losses = vali(args, model, device, dev_loader)     
         log_file.write(str(dev_losses[0])+','+str(dev_losses[1])+','+str(dev_losses[2])+'\n')
-        print('finish epoch {}'.format(epoch))                    
+        print('finish epoch {}; time elapsed: {}'.format(epoch,  time_elapsed(time.time() - start)))                   
     log_file.close()
     log_detailed_file.close()
 

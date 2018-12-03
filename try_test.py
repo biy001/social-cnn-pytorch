@@ -28,7 +28,7 @@ def test(args, model, device, test_loader):
     test_loss = 0
     disp_error = 0
     fina_disp_error = 0
-    pred_target_pair_list = []
+    target_pred_pair_list = []
     test_log_directory = 'log/'
     test_log_file = open(os.path.join(test_log_directory, 'test_errors_wi_testset_'+str(args.testset)+'.txt'), 'w')
     i = 0

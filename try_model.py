@@ -12,10 +12,6 @@ Note 7: adding batch norm and relu to intermediate fc layer doesn't help
 Note 8: changing relu to leaky_relu improves a lot??? + dev error is much smaller than train error???
 * current version is the best version *
 """
-# ---------  things to do: --------
-# 11/26 possible things to try:
-# look at some resulted trajectories in plot
-# ----------------------------------
 import os
 import torch
 import torch.utils.data
@@ -118,14 +114,13 @@ class CNNTrajNet(nn.Module):
 
 def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file):
     save_directory = 'save/'
-    with open(os.path.join(save_directory, 'train_config.pkl'), 'wb') as f:
-        pickle.dump(args, f)
     def checkpoint_path(epoch_num):
         return os.path.join(save_directory, 'model_'+str(args.testset)+'_'+str(epoch_num)+'.tar') # careful args.testset is a list..
 
     model.train()
     loss_func = nn.MSELoss()
     train_loss = 0
+    target_pred_pair_list = []
     # losses = []
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
@@ -136,6 +131,7 @@ def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file
         train_loss += loss.item()
         loss.backward()
         optimizer.step()
+        target_pred_pair_list.append((torch.squeeze(data).cpu().numpy(), torch.squeeze(target).cpu().numpy(), torch.squeeze(output).cpu().detach().numpy())) 
 
         # losses.append(loss.item())
         if args.verbose and batch_idx % args.log_interval == 0:
@@ -147,6 +143,8 @@ def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file
     train_loss /= len(train_loader.dataset)
     print('average train loss for Epoch {} is: {:.4f}'.format(epoch, train_loss))
 
+    with open(os.path.join(save_directory, 'final_train_results_wi_testset_'+str(args.testset)+'.pkl'), 'wb') as f: # format: [(2m X T, 2m X T, 2m X T), (2m X T, 2m X T, 2m X T),...]
+        pickle.dump(target_pred_pair_list, f)
 
     if epoch % args.save_every == 0:
         print('Saving model')
@@ -162,12 +160,13 @@ def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file
 
 
 def vali(args, model, device, dev_loader):
+    save_directory = 'save/'
     model.eval()
     loss_func = nn.MSELoss()
     dev_loss = 0
     disp_error = 0
     fina_disp_error = 0
-    # losses = []
+    target_pred_pair_list = []
     with torch.no_grad():
         for data, target in dev_loader:
             data, target = data.to(device), target.to(device)
@@ -176,6 +175,8 @@ def vali(args, model, device, dev_loader):
             dev_loss += loss_func(pred, target).item() # sum up batch loss
             disp_error += displacement_error(reshape_output(pred, mode ='disp'), reshape_output(target, mode ='disp')).item()
             fina_disp_error += final_displacement_error(reshape_output(pred, mode ='f_disp'), reshape_output(target, mode ='f_disp')).item()
+            target_pred_pair_list.append((torch.squeeze(data).cpu().numpy(), torch.squeeze(target).cpu().numpy(), torch.squeeze(pred).cpu().numpy())) 
+
             # losses.append(dev_loss)
             
     dev_loss /= len(dev_loader.dataset)
@@ -183,6 +184,8 @@ def vali(args, model, device, dev_loader):
     fina_disp_error /= len(dev_loader.dataset)
     print('\nDev set: Average loss: {:.4f}, disp error: {:.4f}, final disp error: {:.4f}\n'.format(
         dev_loss, disp_error, fina_disp_error))
+    with open(os.path.join(save_directory, 'final_dev_results_wi_testset_'+str(args.testset)+'.pkl'), 'wb') as f: 
+        pickle.dump(target_pred_pair_list, f)
     return [dev_loss, disp_error, fina_disp_error]
 
 def reshape_output(s, mode ='disp'):
@@ -286,7 +289,7 @@ def main():
     parser.add_argument('--lr_decay_rate', type=float, default=0.1, 
                         help='learning rate decay rate')
     # Lambda regularization parameter (L2)
-    parser.add_argument('--lambda_param', type=float, default=0.0005,
+    parser.add_argument('--lambda_param', type=float, default=0.01,
                         help='L2 regularization parameter')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')
@@ -322,6 +325,9 @@ def main():
     # ---------  leave room for a resume option--------
     # add a resume option to continue training from a existing presaved model
     # ----------------------------------
+    with open(os.path.join('save/', 'train_config.pkl'), 'wb') as f:
+        pickle.dump(args, f)
+        
     log_directory = 'log/'   # log_file format: epoch, average_train_loss, dev_loss, disp_error, final_disp_error
     log_file = open(os.path.join(log_directory, 'train_errors_per_epoch_excluding_testset_'+str(args.testset)+'.txt'), 'w')
     # log_detailed_file format: epoch, batch/example_index, train error for that batch/example at that epoch

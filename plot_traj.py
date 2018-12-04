@@ -6,7 +6,7 @@ import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 
-
+# Choose to plot train, dev, or test set
 # test_results.pkl format: input, target and pred pair in a tuple: [(2m X T, 2m X T, 2m X T), (2m X T, 2m X T, 2m X T),...]
 
 
@@ -54,10 +54,10 @@ def plot_traj(args, traj_file):
 
 def main():
 	parser = argparse.ArgumentParser(description='PyTorch CNNTrajNet')
-	parser.add_argument('--example_num', type=int, default=0, help='the example number to be plotted')
+	parser.add_argument('--example_num', type=int, default=100, help='the example number to be plotted')
 	parser.add_argument('--x_scaling_factor', type=float, default=0.36883, help='true x = current_x * x_scaling_factor')
 	parser.add_argument('--y_scaling_factor', type=float, default=0.459005, help='true y = current_y * y_scaling_factor')
-	parser.add_argument('--train_or_dev_or_test', type=str, default='test', help='choose among train, dev, and test')
+	parser.add_argument('--train_or_dev_or_test', type=str, default='train', help='choose among train, dev, and test')
 	plot_traj_args = parser.parse_args()
 
 	save_directory = 'save/'
@@ -83,4 +83,5 @@ def main():
 
 if __name__ == '__main__':
 	main()
+
 

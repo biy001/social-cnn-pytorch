@@ -102,7 +102,7 @@ def main():
         sys.exit('Execution stopped: model for test set '+str(saved_args.testset)+', epoch '+str(test_args.epoch_num)+' does not exist for loading')
 
     # Test data loading
-    if args.delete_all_zero_rows:
+    if saved_args.delete_all_zero_rows:
         from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
     else:
         from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN

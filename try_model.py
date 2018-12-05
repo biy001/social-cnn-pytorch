@@ -364,9 +364,7 @@ def main():
         # adjust_learning_rate(optimizer, epoch, args.lr_decay_rate, args.learning_rate)
         train_losses = train(args, model, device, train_loader, optimizer, epoch, log_detailed_file)   #--------- use losses to graph? ---------
         log_file.write(str(epoch)+','+str(train_losses)+',')
-
         dev_losses = vali(args, model, device, dev_loader)  
-
         log_file.write(str(dev_losses[0])+','+str(dev_losses[1])+','+str(dev_losses[2])+'\n')
         print('finish epoch {}; time elapsed: {}'.format(epoch,  time_elapsed(time.time() - start)))                   
     log_file.close()

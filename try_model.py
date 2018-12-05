@@ -25,7 +25,7 @@ from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+# from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 
 class CNNTrajNet(nn.Module):
 
@@ -311,7 +311,7 @@ def main():
                         help='random seed (default: 1)')
     parser.add_argument('--log_interval', type=int, default=100,
                         help='how many batches to wait before logging training status')
-    parser.add_argument('--delete_all_zero_rows', type=bool, default=True,     
+    parser.add_argument('--delete_all_zero_rows', type=bool, default=False,     
                         help='if needs to delete all zero rows')
     parser.add_argument('--verbose', type=bool, default=True,     
                         help='printing log')
@@ -321,6 +321,11 @@ def main():
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
     torch.manual_seed(args.seed)
+
+    if args.delete_all_zero_rows:
+        from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    else:
+        from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 
     # Data preprocessor
     processor = CustomDataPreprocessorForCNN(input_seq_length=args.input_size, pred_seq_length=args.output_size, test_data_sets = args.testset, dev_ratio_to_test_set = args.dev_ratio, forcePreProcess=args.forcePreProcess)

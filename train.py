@@ -14,7 +14,7 @@ processor = CustomDataPreprocessorForCNN(test_data_sets = [2], dev_ratio_to_test
 # Processed datasets. (training/dev/test)
 train_set = CustomDatasetForCNN(processor.processed_train_data_file)
 dev_set = CustomDatasetForCNN(processor.processed_dev_data_file)
-test_set = CustomDatasetForCNN(processor.processed_dev_data_file)
+test_set = CustomDatasetForCNN(processor.processed_test_data_file)
 
 # Use DataLoader object to load data. Note batch_size=1 is necessary since each datum has different rows (i.e. number of pedestrians).
 train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=1, shuffle=True)

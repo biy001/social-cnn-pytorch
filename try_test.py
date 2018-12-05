@@ -36,6 +36,10 @@ def test(args, model, device, test_loader):
     with torch.no_grad():
         for data, target in test_loader:
             i += 1
+            if args.delete_all_zero_rows:
+                nonzero_ind = nonzero_row_index(torch.squeeze(data,0))
+                data = data[:,nonzero_ind,:]
+                target = target[:,nonzero_ind,:]
             data, target = data.to(device), target.to(device)
             target = target.float()
             pred = torch.squeeze(model(data), 2) # 1 X 2m X T
@@ -61,6 +65,10 @@ def test(args, model, device, test_loader):
     test_log_file.close()
     return [test_loss, disp_error, fina_disp_error]
 
+def nonzero_row_index(inp):
+    sr = torch.sum(inp, dim=1) # size = [nrow, 1]
+    sr_ind_tensor = (sr != 0).nonzero() # nonzero index
+    return sr_ind_tensor.numpy().ravel() # index in 1Darray
 
 def main():
     # Training settings

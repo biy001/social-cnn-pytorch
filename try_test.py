@@ -12,7 +12,7 @@ from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+# from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 from try_model import CNNTrajNet, reshape_output, displacement_error, final_displacement_error, time_elapsed
 
 # test_log_file format: example #, test_loss, disp_error, fina_disp_error
@@ -102,6 +102,11 @@ def main():
         sys.exit('Execution stopped: model for test set '+str(saved_args.testset)+', epoch '+str(test_args.epoch_num)+' does not exist for loading')
 
     # Test data loading
+    if args.delete_all_zero_rows:
+        from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    else:
+        from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+        
     processor = CustomDataPreprocessorForCNN(input_seq_length=saved_args.input_size, pred_seq_length=saved_args.output_size, test_data_sets = saved_args.testset, dev_ratio_to_test_set = saved_args.dev_ratio, forcePreProcess=saved_args.forcePreProcess)
     test_set = CustomDatasetForCNN(processor.processed_test_data_file)
     test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=saved_args.batch_size, shuffle=True)

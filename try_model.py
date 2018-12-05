@@ -111,18 +111,26 @@ class CNNTrajNet(nn.Module):
         x = self.output_fc(x) # (N, W, H, C) = 1 X 2m X 1 X T
         return F.leaky_relu(x)
 
+def nonzero_row_index(inp):
+    sr = torch.sum(inp, dim=1) # size = [nrow, 1]
+    sr_ind_tensor = (sr != 0).nonzero() # nonzero index
+    return sr_ind_tensor.numpy().ravel() # index in 1Darray
 
 def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file):
     save_directory = 'save/'
     def checkpoint_path(epoch_num):
         return os.path.join(save_directory, 'model_'+str(args.testset)+'_'+str(epoch_num)+'.tar') # careful args.testset is a list..
-
     model.train()
     loss_func = nn.MSELoss()
     train_loss = 0
     target_pred_pair_list = []
-    # losses = []
     for batch_idx, (data, target) in enumerate(train_loader):
+        # delete all_zero rows
+        if args.delete_all_zero_rows:
+            nonzero_ind = nonzero_row_index(torch.squeeze(data,0))
+            data = data[:,nonzero_ind,:]
+            target = target[:,nonzero_ind,:]
+
         data, target = data.to(device), target.to(device)
         target = target.float()
         optimizer.zero_grad()
@@ -132,7 +140,6 @@ def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file
         loss.backward()
         optimizer.step()
         target_pred_pair_list.append((torch.squeeze(data).cpu().numpy(), torch.squeeze(target).cpu().numpy(), torch.squeeze(output).cpu().detach().numpy())) 
-
         # losses.append(loss.item())
         if args.verbose and batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
@@ -169,6 +176,13 @@ def vali(args, model, device, dev_loader):
     target_pred_pair_list = []
     with torch.no_grad():
         for data, target in dev_loader:
+            # delete all_zero rows
+            if args.delete_all_zero_rows:
+                nonzero_ind = nonzero_row_index(torch.squeeze(data,0))
+
+
+                data = data[:,nonzero_ind,:]
+                target = target[:,nonzero_ind,:]
             data, target = data.to(device), target.to(device)
             target = target.float()
             pred = torch.squeeze(model(data), 2) # 1 X 2m X T
@@ -297,6 +311,8 @@ def main():
                         help='random seed (default: 1)')
     parser.add_argument('--log_interval', type=int, default=100,
                         help='how many batches to wait before logging training status')
+    parser.add_argument('--delete_all_zero_rows', type=bool, default=True,     
+                        help='if needs to delete all zero rows')
     parser.add_argument('--verbose', type=bool, default=True,     
                         help='printing log')
 
@@ -344,7 +360,8 @@ def main():
         train_losses = train(args, model, device, train_loader, optimizer, epoch, log_detailed_file)   #--------- use losses to graph? ---------
         log_file.write(str(epoch)+','+str(train_losses)+',')
 
-        dev_losses = vali(args, model, device, dev_loader)     
+        dev_losses = vali(args, model, device, dev_loader)  
+
         log_file.write(str(dev_losses[0])+','+str(dev_losses[1])+','+str(dev_losses[2])+'\n')
         print('finish epoch {}; time elapsed: {}'.format(epoch,  time_elapsed(time.time() - start)))                   
     log_file.close()

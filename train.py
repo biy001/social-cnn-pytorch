@@ -38,6 +38,10 @@ for batch_idx, (data, target) in enumerate(train_loader):
 	i = i + 1
 	if i > 1:
 		break
+		
+print("Training set size: {}".format(len(train_loader)))
+print("Dev set size: {}".format(len(dev_loader)))
+print("Test set size: {}".format(len(test_loader)))
 
 
 

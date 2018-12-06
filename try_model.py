@@ -1,5 +1,5 @@
 """
-Experiments on the model:
+Experiments on modifying the architecture (end of Thanksgiving week):
 Note 1: max pooling makes performance worse FF.leaky_relu(F.max_pool2d(self.bn1(x), kernel_size = ...)) 
 kernel_size = 2, stride=1, padding = 1, dilation=2 => initial error: 0.08
 kernel_size = 3, stride=1, padding = 1 => initial error: 0.14
@@ -11,6 +11,35 @@ Note 6: Adam is better than SGD
 Note 7: adding batch norm and relu to intermediate fc layer doesn't help
 Note 8: changing relu to leaky_relu improves a lot??? + dev error is much smaller than train error???
 * current version is the best version *
+
+12/05 my thoughts:
+1. maybe still need more data? always not a bad thing. Do try pad 0's
+Questions:
+1. high variance (L2 regularization, dropout all increase bias AND variance)
+2. network needs change? e.g increase network size + regularization <= Kian: not really since you are building an exisiting NN from paper
+3. Is it reasonable I only look at the first few epochs to see the trend <= Kian: no, definitely not enough
+
+Kian's advice:
+1. definitely train longer
+2. tune regularization/dropout at different layers in network; try different combinations
+3. check training set bad examples, does it correspond to any dev set error. 
+4. dev error can be averaged over the close 5 epochs, so less vibrations. # Done
+5. mix some test sets wtih training. I'm thinking maybe try several sets at a time as testing sets, and to be mixed with train sets. 
+maybe test on a Stanford dataset?? since the majority of data is from Stanford
+6. learning rate decay....just try hard try different hyperparameters. 
+
+************************************************************************
+------------------- PLEASE READ BEFORE TRAINING ------------------- 
+************************************************************************
+Specs: 
+dev_ratio = 0.5
+epochs = 500 # just want to train as long duration as possible; mannually stop (Ctl+C) anytime if needs to stop
+
+
+current version:
+lambda_param = 0.02
+dropout_rate = 0.06
+delete_all_zero_rows defaults to False
 """
 import os
 import torch
@@ -25,7 +54,7 @@ from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-# from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN       
+# from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 
 class CNNTrajNet(nn.Module):
 
@@ -41,7 +70,7 @@ class CNNTrajNet(nn.Module):
         self.input_size = args.input_size # means the input sequence length
         self.output_size = args.output_size
 
-        self.input_embedding_layer = nn.Linear(1, self.embedding_size) # assume embedding_size = 24
+        self.input_embedding_layer = nn.Linear(1, self.embedding_size) # assume embedding_size = 32
 
         self.conv1 = nn.Conv2d(in_channels = self.input_size, out_channels = 2*self.input_size, kernel_size = 3, padding = (0,2), dilation=2)
         self.bn1 = nn.BatchNorm2d(2*self.input_size) # padding 1 to keep the same size
@@ -104,9 +133,9 @@ class CNNTrajNet(nn.Module):
         # x = self.interm_fc1_bn(torch.transpose(x, 1, 3)) # (N, C, H, W) = 1 X 8t X 1 X 2m
         # x = F.leaky_relu(torch.transpose(x, 1, 3))
 
-        # # add dropout
-        # if self.dropout_rate != 0:
-        #     x = F.dropout(x, p=self.dropout_rate, training=self.training)
+        # add dropout
+        if self.dropout_rate != 0:
+            x = F.dropout(x, p=self.dropout_rate, training=self.training)
 
         x = self.output_fc(x) # (N, W, H, C) = 1 X 2m X 1 X T
         return F.leaky_relu(x)
@@ -196,8 +225,8 @@ def vali(args, model, device, dev_loader):
     dev_loss /= len(dev_loader.dataset)
     disp_error /= len(dev_loader.dataset)
     fina_disp_error /= len(dev_loader.dataset)
-    print('\nDev set: Average loss: {:.4f}, disp error: {:.4f}, final disp error: {:.4f}\n'.format(
-        dev_loss, disp_error, fina_disp_error))
+    # print('\nDev set: Average loss: {:.4f}, disp error: {:.4f}, final disp error: {:.4f}\n'.format(
+    #     dev_loss, disp_error, fina_disp_error))
     with open(os.path.join(save_directory, 'final_dev_results_wi_testset_'+str(args.testset)+'.pkl'), 'wb') as f: 
         pickle.dump(target_pred_pair_list, f)
     return [dev_loss, disp_error, fina_disp_error]
@@ -279,10 +308,10 @@ def main():
     parser.add_argument('--output_size', type=int, default=5) # prediction sequence length
     parser.add_argument('--batch_size', type=int, default=1, 
                         help='minibatch (default: 1)')
-    parser.add_argument('--epochs', type=int, default=100, 
-                        help='number of epochs to train (default: 100)')
+    parser.add_argument('--epochs', type=int, default=500, 
+                        help='number of epochs to train')
 
-    parser.add_argument('--dev_ratio', type=float, default=0.3,      # not using dev set for now
+    parser.add_argument('--dev_ratio', type=float, default=0.5,      # not using dev set for now
                         help='the ratio of dev set to test set')
     parser.add_argument('--testset', type=list, default=[2],     
                         help='test_data_sets (default: [2])')
@@ -291,10 +320,9 @@ def main():
     # Frequency at which the model should be saved parameter
     parser.add_argument('--save_every', type=int, default=1,      # don't forget
                         help='save frequency')
-    # Dropout not implemented.
     # Dropout probability parameter
-    parser.add_argument('--dropout_rate', type=float, default=0.4,       # not using dropout for now
-                        help='dropout probability (default: 0.2)')
+    parser.add_argument('--dropout_rate', type=float, default=0.06,       # dropout 
+                        help='dropout probability')
     # Dimension of the embeddings parameter
     parser.add_argument('--embedding_size', type=int, default=32,
                         help='Embedding dimension for the spatial coordinates')
@@ -303,7 +331,7 @@ def main():
     parser.add_argument('--lr_decay_rate', type=float, default=0.1, 
                         help='learning rate decay rate')
     # Lambda regularization parameter (L2)
-    parser.add_argument('--lambda_param', type=float, default=0.05,   #0.01
+    parser.add_argument('--lambda_param', type=float, default=0.02, #0.01
                         help='L2 regularization parameter')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')
@@ -326,7 +354,6 @@ def main():
         from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
     else:
         from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-
 
     # Data preprocessor
     processor = CustomDataPreprocessorForCNN(input_seq_length=args.input_size, pred_seq_length=args.output_size, test_data_sets = args.testset, dev_ratio_to_test_set = args.dev_ratio, forcePreProcess=args.forcePreProcess)
@@ -361,16 +388,30 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr = args.learning_rate, weight_decay=args.lambda_param)
     # optimizer = torch.optim.SGD(model.parameters(), lr= args.learning_rate, momentum=0.9, weight_decay=args.lambda_param)
 
+    averg_epoch_n = 15
+    accum_dev_loss = np.zeros((averg_epoch_n, 3))
     for epoch in range(1, args.epochs + 1):
         # adjust_learning_rate(optimizer, epoch, args.lr_decay_rate, args.learning_rate)
-        train_losses = train(args, model, device, train_loader, optimizer, epoch, log_detailed_file)   #--------- use losses to graph? ---------
+        # get train loss
+        train_losses = train(args, model, device, train_loader, optimizer, epoch, log_detailed_file)   
         log_file.write(str(epoch)+','+str(train_losses)+',')
-
-        dev_losses = vali(args, model, device, dev_loader)  
-
+        # get dev loss
+        curr_dev_losses = vali(args, model, device, dev_loader)  #[dev_error, disp_error, final_disp_error]
+        if epoch < averg_epoch_n + 1:
+            for i in range(3):
+                accum_dev_loss[epoch-1, i] = curr_dev_losses[i]
+            dev_losses = list(np.sum(accum_dev_loss, axis=0)/epoch)
+        else:
+            accum_dev_loss = np.delete(accum_dev_loss, 0, 0)  # delete the first object on axis = 0 (delete a row)
+            accum_dev_loss = np.append(accum_dev_loss, [curr_dev_losses], axis=0) # append at the end
+            dev_losses = list(np.sum(accum_dev_loss, axis=0)/averg_epoch_n)
         log_file.write(str(dev_losses[0])+','+str(dev_losses[1])+','+str(dev_losses[2])+'\n')
-        print('finish epoch {}; time elapsed: {}'.format(epoch,  time_elapsed(time.time() - start))) 
-        print(' ')                  
+        print('\nDev set: Average loss: {:.4f}, disp error: {:.4f}, final disp error: {:.4f}\n'.format(
+        dev_losses[0], dev_losses[1], dev_losses[2]))
+
+
+        print('finish epoch {}; time elapsed: {}'.format(epoch,  time_elapsed(time.time() - start)))
+        print(' ')                 
     log_file.close()
     log_detailed_file.close()
 

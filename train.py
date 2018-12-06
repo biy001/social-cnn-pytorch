@@ -6,7 +6,15 @@ import numpy as np
 import random
 
 
-from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+answer = None
+while answer not in ('y', 'n'):
+    answer = input('Do you want to preprocess data of the 0 padding version? (y/n)')
+    if answer == 'y':
+        from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    elif answer == 'n':
+        from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    else:
+        print('Please enter y or n')
 
 # Data preprocessor.
 processor = CustomDataPreprocessorForCNN(test_data_sets = [2], dev_ratio_to_test_set = 0.5, forcePreProcess=True)

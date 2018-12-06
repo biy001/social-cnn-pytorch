@@ -25,7 +25,7 @@ from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-# from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+# from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN       
 
 class CNNTrajNet(nn.Module):
 
@@ -282,7 +282,7 @@ def main():
     parser.add_argument('--epochs', type=int, default=100, 
                         help='number of epochs to train (default: 100)')
 
-    parser.add_argument('--dev_ratio', type=float, default=0.1,      # not using dev set for now
+    parser.add_argument('--dev_ratio', type=float, default=0.3,      # not using dev set for now
                         help='the ratio of dev set to test set')
     parser.add_argument('--testset', type=list, default=[2],     
                         help='test_data_sets (default: [2])')
@@ -303,13 +303,13 @@ def main():
     parser.add_argument('--lr_decay_rate', type=float, default=0.1, 
                         help='learning rate decay rate')
     # Lambda regularization parameter (L2)
-    parser.add_argument('--lambda_param', type=float, default=0.01,
+    parser.add_argument('--lambda_param', type=float, default=0.05,   #0.01
                         help='L2 regularization parameter')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')
     parser.add_argument('--seed', type=int, default=1,
                         help='random seed (default: 1)')
-    parser.add_argument('--log_interval', type=int, default=100,
+    parser.add_argument('--log_interval', type=int, default=1000,
                         help='how many batches to wait before logging training status')
     parser.add_argument('--delete_all_zero_rows', type=bool, default=False,     
                         help='if needs to delete all zero rows')
@@ -326,6 +326,7 @@ def main():
         from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
     else:
         from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+
 
     # Data preprocessor
     processor = CustomDataPreprocessorForCNN(input_seq_length=args.input_size, pred_seq_length=args.output_size, test_data_sets = args.testset, dev_ratio_to_test_set = args.dev_ratio, forcePreProcess=args.forcePreProcess)
@@ -364,9 +365,12 @@ def main():
         # adjust_learning_rate(optimizer, epoch, args.lr_decay_rate, args.learning_rate)
         train_losses = train(args, model, device, train_loader, optimizer, epoch, log_detailed_file)   #--------- use losses to graph? ---------
         log_file.write(str(epoch)+','+str(train_losses)+',')
+
         dev_losses = vali(args, model, device, dev_loader)  
+
         log_file.write(str(dev_losses[0])+','+str(dev_losses[1])+','+str(dev_losses[2])+'\n')
-        print('finish epoch {}; time elapsed: {}'.format(epoch,  time_elapsed(time.time() - start)))                   
+        print('finish epoch {}; time elapsed: {}'.format(epoch,  time_elapsed(time.time() - start))) 
+        print(' ')                  
     log_file.close()
     log_detailed_file.close()
 

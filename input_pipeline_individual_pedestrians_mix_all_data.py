@@ -7,7 +7,7 @@ import random
 from tqdm import tqdm
 
 class CustomDataPreprocessorForCNN():
-    def __init__(self, input_seq_length=5, pred_seq_length=5, datasets=[i for i in range(37)], dev_ratio=0.2, test_ratio=0.2, forcePreProcess=False, augmentation=True):
+    def __init__(self, input_seq_length=5, pred_seq_length=5, datasets=[i for i in range(37)], dev_ratio=0.1, test_ratio=0.1, forcePreProcess=False, augmentation=False):
         self.data_paths = ['./data/train/raw/biwi/biwi_hotel.txt', './data/train/raw/crowds/arxiepiskopi1.txt',
                           './data/train/raw/crowds/crowds_zara02.txt', './data/train/raw/crowds/crowds_zara03.txt',
                           './data/train/raw/crowds/students001.txt', './data/train/raw/crowds/students003.txt', 
@@ -54,7 +54,7 @@ class CustomDataPreprocessorForCNN():
         # Data augmentation flag
         self.augmentation = augmentation
         # Rotation increment (deg) for data augmentation (only valid if augmentation is True)
-        self.rot_deg_increment = 30
+        self.rot_deg_increment = 120
         
         # Define the path in which the process data would be stored
         self.processed_train_data_file = os.path.join(self.data_dir, "trajectories_cnn_train.cpkl")
@@ -69,21 +69,16 @@ class CustomDataPreprocessorForCNN():
             self.preprocess()
             
     def normalize(self):
-        i = 0
+        if self.augmentation:
+            print('--> Data Augmentation: Rotation')
         for path in self.data_paths:
-            if i == 1:
-                break
             # Load data from txt file.
             txtfile = open(path, 'r')
             lines = txtfile.read().splitlines()
             data = [line.split() for line in lines]
             data = np.transpose(sorted(data, key=lambda line: int(line[0]))).astype(float)
-            # data[[2,3]] = data[[3,2]]
-            self.raw_data.append(data)
-            i += 1
-            
+            self.raw_data.append(data)            
             if self.augmentation:
-                print('--> Data Augmentation 1: Rotation')
                 # Rotate data by deg_increment deg sequentially for data augmentation (only rotation is considered here)
                 deg_increment_int = int(self.rot_deg_increment)
                 for deg in range(deg_increment_int, 360, deg_increment_int):
@@ -131,6 +126,25 @@ class CustomDataPreprocessorForCNN():
                     data[3,jj] = 0.0
                 else:
                     data[3,jj] = y[jj]
+        ''' # Sanity check.
+        # Find x_max, x_min, y_max, y_min across all the data.
+        x_max_global, x_min_global, y_max_global, y_min_global = -1000, 1000, -1000, 1000
+        for data in self.raw_data:
+            x = data[2,:]
+            x_min, x_max = min(x), max(x)
+            if x_min < x_min_global:
+                x_min_global = x_min
+            if x_max > x_max_global:
+                x_max_global = x_max
+            y = data[3,:]
+            y_min, y_max = min(y), max(y)
+            if y_min < y_min_global:
+                y_min_global = y_min
+            if y_max > y_max_global:
+                y_max_global = y_max
+        print(x_min_global, x_max_global)
+        print(y_min_global, y_max_global)
+        '''
     
     def preprocess(self):
         random.seed(1) # Random seed for pedestrian permutation and data shuffling
@@ -173,7 +187,7 @@ class CustomDataPreprocessorForCNN():
                 # List of pedestrians in this frame.
                 pedsList = pedsInFrameList[ind]
                 for ped in pedsList:
-                    # Check if this pedestrian in this frame is already considered. If so skip this pedestrian.
+                    # Check if "this pedestrian in this frame" is already considered. If so skip this pedestrian.
                     if ped in peds_last_used_frame_dict.keys() and frameList[ind] <= peds_last_used_frame_dict[ped]:
                         continue
                     # Check if same pedestrian exists in the next (input_seq_length + pred_seq_length - 1) frames.
@@ -223,7 +237,7 @@ class CustomDataPreprocessorForCNN():
         self.processed_input_output_pairs = []
     
     def augment_flip(self):
-        print('--> Data Augmentation 2: Y Flip')
+        print('--> Data Augmentation: Y Flip')
         augmented_input_output_pairs = []
         for processed_input_output_pair in tqdm(self.processed_input_output_pairs):
             data_input, data_output = processed_input_output_pair[0].numpy(), processed_input_output_pair[1].numpy()

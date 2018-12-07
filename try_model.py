@@ -28,6 +28,11 @@ Kian's advice:
 maybe test on a Stanford dataset?? since the majority of data is from Stanford
 6. learning rate decay....just try hard try different hyperparameters. 
 
+decoupling pedestrian
+just for debugging, mixing all data before seperating
+
+
+
 ************************************************************************
 ------------------- PLEASE READ BEFORE TRAINING ------------------- 
 ************************************************************************
@@ -165,7 +170,7 @@ def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file
         optimizer.zero_grad()
         output = torch.squeeze(model(data), 2) # 1 X 2m X T
         loss = loss_func(output, target)
-        train_loss += loss.item()
+        train_loss += (loss.item()/(target.size()[1]/2))
         loss.backward()
         optimizer.step()
         target_pred_pair_list.append((torch.squeeze(data).cpu().numpy(), torch.squeeze(target).cpu().numpy(), torch.squeeze(output).cpu().detach().numpy())) 
@@ -215,9 +220,10 @@ def vali(args, model, device, dev_loader):
             data, target = data.to(device), target.to(device)
             target = target.float()
             pred = torch.squeeze(model(data), 2) # 1 X 2m X T
-            dev_loss += loss_func(pred, target).item() # sum up batch loss
-            disp_error += displacement_error(reshape_output(pred, mode ='disp'), reshape_output(target, mode ='disp')).item()
-            fina_disp_error += final_displacement_error(reshape_output(pred, mode ='f_disp'), reshape_output(target, mode ='f_disp')).item()
+            m = target.size()[1]/2
+            dev_loss += (loss_func(pred, target).item()/m) # sum up batch loss
+            disp_error += (displacement_error(reshape_output(pred, mode ='disp'), reshape_output(target, mode ='disp')).item()/m)
+            fina_disp_error += (final_displacement_error(reshape_output(pred, mode ='f_disp'), reshape_output(target, mode ='f_disp')).item()/m)
             target_pred_pair_list.append((torch.squeeze(data).cpu().numpy(), torch.squeeze(target).cpu().numpy(), torch.squeeze(pred).cpu().numpy())) 
 
             # losses.append(dev_loss)
@@ -302,6 +308,18 @@ def time_elapsed(elapsed_seconds):
 
 
 def main():
+    answer = None
+    while answer not in ('y', 'n'):
+        answer = input('Did you save the log/save files from the last train model? (y/n)')
+        if answer == 'y':
+            print('Great')
+        elif answer == 'n':
+            print(' ')
+            print('You should not reach here. You are losing/overwriting log/save files')
+            print(' ')
+        else:
+            print('Please enter y or n')
+
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch CNNTrajNet')
     parser.add_argument('--input_size', type=int, default=5) # input sequence length
@@ -331,7 +349,7 @@ def main():
     parser.add_argument('--lr_decay_rate', type=float, default=0.1, 
                         help='learning rate decay rate')
     # Lambda regularization parameter (L2)
-    parser.add_argument('--lambda_param', type=float, default=0.02, #0.01
+    parser.add_argument('--lambda_param', type=float, default=0.001, #0.01
                         help='L2 regularization parameter')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')

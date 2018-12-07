@@ -136,6 +136,10 @@ class CustomDataPreprocessorForCNN():
             # Go over the frames in this data again to extract data.
             ind = 0  # frame index
             while ind < len(frameList) - (self.input_seq_length + self.pred_seq_length):
+                # Check if this sequence contains consecutive frames. Otherwise skip this sequence.
+                if not frameList[ind + self.input_seq_length + self.pred_seq_length - 1] - frameList[ind] == (self.input_seq_length + self.pred_seq_length - 1)*frame_increment:
+                    ind += 1
+                    continue
                 # List of pedestrians in this frame.
                 pedsList = pedsInFrameList[ind]
                 # Check if same pedestrians exist in the next (input_seq_length + pred_seq_length - 1) frames.
@@ -163,7 +167,7 @@ class CustomDataPreprocessorForCNN():
             
             while ind < len(frameList) - (self.input_seq_length + self.pred_seq_length):
                  # Check if this sequence contains consecutive frames. Otherwise skip this sequence.
-                if not frameList[ind + self.input_seq_length + self.pred_seq_length] - frameList[ind] == (self.input_seq_length + self.pred_seq_length)*frame_increment:
+                if not frameList[ind + self.input_seq_length + self.pred_seq_length - 1] - frameList[ind] == (self.input_seq_length + self.pred_seq_length - 1)*frame_increment:
                     ind += 1
                     continue;
                 # List of pedestirans in this sequence.

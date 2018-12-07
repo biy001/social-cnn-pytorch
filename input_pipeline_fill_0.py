@@ -138,10 +138,10 @@ class CustomDataPreprocessorForCNN():
             ind = 0
             
             while ind < len(frameList) - (self.input_seq_length + self.pred_seq_length):
-                 # Check if this sequence contains consecutive frames. Otherwise skip this sequence.
-                if not frameList[ind + self.input_seq_length + self.pred_seq_length] - frameList[ind] == (self.input_seq_length + self.pred_seq_length)*frame_increment:
+                # Check if this sequence contains consecutive frames. Otherwise skip this sequence.
+                if not frameList[ind + self.input_seq_length + self.pred_seq_length - 1] - frameList[ind] == (self.input_seq_length + self.pred_seq_length - 1)*frame_increment:
                     ind += 1
-                    continue;
+                    continue
                 # List of pedestirans in this sequence.
                 pedsList = np.unique(np.concatenate(pedsInFrameList[ind : ind + self.input_seq_length + self.pred_seq_length])).tolist()
                 # Print the Frame numbers and pedestrian IDs in this sequence for sanity check.

@@ -6,6 +6,7 @@ import numpy as np
 import random
 from tqdm import tqdm
 
+
 class CustomDataPreprocessorForCNN():
     def __init__(self, input_seq_length=5, pred_seq_length=5, datasets=[i for i in range(37)], dev_ratio=0.1, test_ratio=0.1, forcePreProcess=False, augmentation=False):
         self.data_paths = ['./data/train/raw/biwi/biwi_hotel.txt', './data/train/raw/crowds/arxiepiskopi1.txt',
@@ -55,6 +56,8 @@ class CustomDataPreprocessorForCNN():
         self.augmentation = augmentation
         # Rotation increment (deg) for data augmentation (only valid if augmentation is True)
         self.rot_deg_increment = 120
+        # How many pedestrian permutations to consider (only valid if augmentation is True)
+        self.permutations = 4
         
         # Define the path in which the process data would be stored
         self.processed_train_data_file = os.path.join(self.data_dir, "trajectories_cnn_train.cpkl")
@@ -175,40 +178,38 @@ class CustomDataPreprocessorForCNN():
                     if (current_x == 0.0 and current_y == 0.0):
                         print('[WARNING] There exists a pedestrian at coordinate [0.0, 0.0]')
                 pedsPosInFrameList.append(pedsPos)
-            
             # Go over the frames in this data again to extract data.
-            peds_last_used_frame_dict = {}
-            ind = 0  # frame index
+            ind = 0
             while ind < len(frameList) - (self.input_seq_length + self.pred_seq_length):
                 # Check if this sequence contains consecutive frames. Otherwise skip this sequence.
                 if not frameList[ind + self.input_seq_length + self.pred_seq_length - 1] - frameList[ind] == (self.input_seq_length + self.pred_seq_length - 1)*frame_increment:
                     ind += 1
                     continue
-                # List of pedestrians in this frame.
-                pedsList = pedsInFrameList[ind]
-                for ped in pedsList:
-                    # Check if "this pedestrian in this frame" is already considered. If so skip this pedestrian.
-                    if ped in peds_last_used_frame_dict.keys() and frameList[ind] <= peds_last_used_frame_dict[ped]:
-                        continue
-                    # Check if same pedestrian exists in the next (input_seq_length + pred_seq_length - 1) frames.
-                    ped_contained = all([(ped in pedsInFrame) for pedsInFrame in pedsInFrameList[ind:ind+self.input_seq_length+self.pred_seq_length]])
-                    if ped_contained:
-                        data_input = np.zeros((2, self.input_seq_length))
-                        data_output = np.zeros((2, self.pred_seq_length))
-                        for ii in range(self.input_seq_length):
-                            datum_index = pedsInFrameList[ind + ii].index(ped)
-                            data_input[:, ii] = np.array(pedsPosInFrameList[ind + ii][2*datum_index:2*(datum_index + 1)])
-                        for jj in range(self.pred_seq_length):
-                            datum_index = pedsInFrameList[ind + self.input_seq_length + jj].index(ped)
-                            data_output[:, jj] = np.array(pedsPosInFrameList[ind + self.input_seq_length + jj][2*datum_index:2*(datum_index + 1)])
-                        processed_pair = (torch.from_numpy(data_input), torch.from_numpy(data_output))
-                        self.processed_input_output_pairs.append(processed_pair)
-                        peds_last_used_frame_dict[ped] = ind + self.input_seq_length + self.pred_seq_length - 1
-                ind += 1
+                # List of pedestirans in this sequence.
+                pedsList = np.unique(np.concatenate(pedsInFrameList[ind : ind + self.input_seq_length + self.pred_seq_length])).tolist()
+                # Print the Frame numbers and pedestrian IDs in this sequence for sanity check.
+                # print(str(int(self.input_seq_length + self.pred_seq_length)) + ' frames starting from Frame ' + str(int(frameList[ind])) +  ' contain pedestrians ' + str(pedsList))
+                # Initialize numpy arrays for input-output pair
+                data_input = np.zeros((2*len(pedsList), self.input_seq_length))
+                data_output = np.zeros((2*len(pedsList), self.pred_seq_length))
+                for ii in range(self.input_seq_length):
+                    for jj in range(len(pedsList)):
+                        if pedsList[jj] in pedsInFrameList[ind + ii]:
+                            datum_index = pedsInFrameList[ind + ii].index(pedsList[jj])
+                            data_input[2*jj:2*(jj + 1), ii] = np.array(pedsPosInFrameList[ind + ii][2*datum_index:2*(datum_index + 1)])
+                for ii in range(self.pred_seq_length):
+                    for jj in range(len(pedsList)):
+                        if pedsList[jj] in pedsInFrameList[ind + self.input_seq_length + ii]:
+                            datum_index = pedsInFrameList[ind + self.input_seq_length + ii].index(pedsList[jj])
+                            data_output[2*jj:2*(jj + 1), ii] = np.array(pedsPosInFrameList[ind + self.input_seq_length + ii][2*datum_index:2*(datum_index + 1)])
+                processed_pair = (torch.from_numpy(data_input), torch.from_numpy(data_output))
+                self.processed_input_output_pairs.append(processed_pair)
+                ind += self.input_seq_length + self.pred_seq_length
         print('--> Data Size: ' + str(len(self.processed_input_output_pairs)))
         if self.augmentation:
             # Perform data augmentation
             self.augment_flip()
+            self.augment_permute()
         else:
             print('--> Skipping data augmentation')
         # Shuffle data.
@@ -252,6 +253,25 @@ class CustomDataPreprocessorForCNN():
                 data_output_yflipped[2*kk+1, :] = -1*data_output[2*kk+1, :]
             processed_pair_yflipped = (torch.from_numpy(data_input_yflipped), torch.from_numpy(data_output_yflipped))
             augmented_input_output_pairs.append(processed_pair_yflipped)
+        self.processed_input_output_pairs.extend(augmented_input_output_pairs)
+        print('--> Augmented Data Size: ' + str(len(self.processed_input_output_pairs)))
+        
+    def augment_permute(self):
+        # Specify how many pedestrian permutations to consider per input-output pair
+        print('--> Data Augmentation: Pedestrian Permutation (' + str(self.permutations) + ' random permutations per input-output pair)')
+        augmented_input_output_pairs = []
+        for processed_input_output_pair in tqdm(self.processed_input_output_pairs):
+            data_input, data_output = processed_input_output_pair[0].numpy(), processed_input_output_pair[1].numpy()
+            num_peds = int(data_input.shape[0]/2)
+            for ii in range(self.permutations):
+                perm = np.random.permutation(num_peds)
+                data_input_permuted = np.zeros_like(data_input)
+                data_output_permuted = np.zeros_like(data_output)
+                for jj in range(len(perm)):
+                    data_input_permuted[2*jj:2*(jj+1), :] = data_input[2*perm[jj]:2*(perm[jj]+1), :]
+                    data_output_permuted[2*jj:2*(jj+1), :] = data_output[2*perm[jj]:2*(perm[jj]+1), :]
+                processed_pair_permuted = (torch.from_numpy(data_input_permuted), torch.from_numpy(data_output_permuted))
+                augmented_input_output_pairs.append(processed_pair_permuted)
         self.processed_input_output_pairs.extend(augmented_input_output_pairs)
         print('--> Augmented Data Size: ' + str(len(self.processed_input_output_pairs)))
                     

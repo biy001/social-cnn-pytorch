@@ -1,3 +1,14 @@
+
+# answer = None
+# while answer not in ('y', 'n'):
+#     answer = input('Do you want to preprocess data of the 0 padding version? (y/n)')
+#     if answer == 'y':
+#         from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+#     elif answer == 'n':
+#         from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+#     else:
+#         print('Please enter y or n')
+
 import os
 import torch
 import torch.utils.data
@@ -6,18 +17,14 @@ import numpy as np
 import random
 
 
-answer = None
-while answer not in ('y', 'n'):
-    answer = input('Do you want to preprocess data of the 0 padding version? (y/n)')
-    if answer == 'y':
-        from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-    elif answer == 'n':
-        from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-    else:
-        print('Please enter y or n')
+# from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+# from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+# from input_pipeline_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+from input_pipeline_fill_0_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 
 # Data preprocessor.
-processor = CustomDataPreprocessorForCNN(test_data_sets = [2], dev_ratio_to_test_set = 0.5, forcePreProcess=True)
+# processor = CustomDataPreprocessorForCNN(test_data_sets = [35], dev_ratio_to_test_set = 0.5, forcePreProcess=True)
+processor = CustomDataPreprocessorForCNN(dev_ratio=0.1, test_ratio=0.1, forcePreProcess=True, augmentation=True)
 
 # Processed datasets. (training/dev/test)
 train_set = CustomDatasetForCNN(processor.processed_train_data_file)
@@ -31,25 +38,29 @@ test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=1, shuffl
 
 # Each example is a pair of (input_sequence, prediction_sequence). Each sequence is a torch tensor (matrix) where each row corresponds to 
 # either x or y position of a pedestrian and each column corresponds to a frame.
-print(next(iter(train_loader)))
 
-print("  ")
-print("enter for loop")
-print("  ")
-i = 0
-for batch_idx, (data, target) in enumerate(train_loader):
-	print(batch_idx)
-	# print(data)
-	print(list(data.size()))
-	print(list(target.size()))
-	print(" ")
-	i = i + 1
-	if i > 1:
-		break
-		
 print("Training set size: {}".format(len(train_loader)))
 print("Dev set size: {}".format(len(dev_loader)))
 print("Test set size: {}".format(len(test_loader)))
+
+print(processor.scale_factor_x)
+print(processor.scale_factor_y)
+
+# print(next(iter(train_loader)))
+
+# print("  ")
+# print("enter for loop")
+# print("  ")
+# i = 0
+# for batch_idx, (data, target) in enumerate(train_loader):
+# 	print(batch_idx)
+# 	# print(data)
+# 	print(list(data.size()))
+# 	print(list(target.size()))
+# 	print(" ")
+# 	i = i + 1
+# 	if i > 1:
+# 		break
 
 
 

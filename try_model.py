@@ -215,7 +215,7 @@ def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file
             log_detailed_file.write(str(epoch)+','+str(batch_idx * len(data))+','+str(loss.item())+'\n')
 
     train_loss /= len(train_loader.dataset)
-    print('average train loss for Epoch {} is: {:.4f}'.format(epoch, train_loss))
+    print('average train loss for Epoch {} is: {:.8f}'.format(epoch, train_loss))
 
     with open(os.path.join(save_directory, 'final_train_results_wi_testset_'+str(args.testset)+'.pkl'), 'wb') as f: # format: [(2m X T, 2m X T, 2m X T), (2m X T, 2m X T, 2m X T),...]
         pickle.dump(target_pred_pair_list, f)
@@ -474,7 +474,7 @@ def main():
             accum_dev_loss = np.append(accum_dev_loss, [curr_dev_losses], axis=0) # append at the end
             dev_losses = list(np.sum(accum_dev_loss, axis=0)/averg_epoch_n)
         log_file.write(str(dev_losses[0])+','+str(dev_losses[1])+','+str(dev_losses[2])+'\n')
-        print('\nDev set: Average loss: {:.4f}, disp error: {:.4f}, final disp error: {:.4f}\n'.format(
+        print('\nDev set: Average loss: {:.8f}, disp error: {:.4f}, final disp error: {:.4f}\n'.format(
         dev_losses[0], dev_losses[1], dev_losses[2]))
 
 

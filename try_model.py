@@ -13,13 +13,12 @@ just for debugging, mixing all data before seperating
 
 [normal, fill_0, individual] x [mix_all_data, specify_test_set]
 
-(1) normal, mix_all_data               
-(2) normal, specify_test_set          
-(3) fill_0, mix_all_data              
-(4) fill_0, specify_test_set          
-(5) individual, mix_all_data           
-(6) individual, specify_test_set      
-
+(1) normal, mix_all_data               - done wrong disp error/ wrong loss backpropagation
+(2) normal, specify_test_set           - done wrong disp error/ wrong loss backpropagation
+(3) fill_0, mix_all_data               - done wrong disp error/ wrong loss backpropagation - started Sat night, finished Sun night
+(4) fill_0, specify_test_set           - 
+(5) individual, mix_all_data           - 
+(6) individual, specify_test_set       - training: started Sunday night
 
 
 
@@ -30,19 +29,26 @@ just for debugging, mixing all data before seperating
 documentation & analysis
 1. e.g analyze if trying permute make a difference. Just a bunch of tries.
 
+
+
 12/9 NOTE:
 
 1. current loss is for each pedistrain in a sequence of T. 
+
 2. training before 12/9 Sunday night (affecting (1)(2)(3)): 
-(a) has wrong disp and final_disp errors, which are incorrectly divided by m^2
-(b) loss for backpropogation in each batch is the sum of all pedestrians in one example; logged train_loss is still for each pedestrian
+(a) has wrong disp and final_disp errors, which are incorrectly divided by m^2; 
+values will be  * inconsistent *  with previous trainings. 
+
+(b) loss for backpropogation in each batch is the sum of all pedestrians in one example; 
+logged train_loss is still for each pedestrian;
+loss curve is still  * consistent *  with previous trainings. 
 
 
 ************************************************************************
 ------------------- PLEASE READ BEFORE TRAINING ------------------- 
 ************************************************************************
 Specs: 
-dev_ratio = 0.5
+dev_ratio = 0.5 when test set can be selected; dev_ratio = test_ratio = 0.1 for mixed datasets. 
 epochs = 500 # just want to train as long duration as possible; mannually stop (Ctl+C) anytime if needs to stop
 
 
@@ -336,7 +342,7 @@ def main():
         print('(1) Did you save the log/save files from the last train model?'); print(' ')
         print('(2) Are you using the correct data pipeline to load train, dev, test sets?'); print(' ')
         print('(3) Did you run train_fill_0.py to delete all-0 rows and re-dump the preprocessed data WHILE you need to?'); print(' ')
-        print('(4) Did you set a valid batch_size when you are training normal/individual example?')
+        print('(4) Did you set a valid batch_size when you are training normal/individual examples?')
         answer = input('(y/n)')
         if answer == 'y':
             print('Great')
@@ -454,8 +460,8 @@ def main():
     for epoch in range(1, args.epochs + 1):
         # adjust_learning_rate(optimizer, epoch, args.lr_decay_rate, args.learning_rate)
         # get train loss
-        # train_losses = train(args, model, device, train_loader, optimizer, epoch, log_detailed_file, x_y_scale[0], x_y_scale[1])   
-        # log_file.write(str(epoch)+','+str(train_losses)+',')
+        train_losses = train(args, model, device, train_loader, optimizer, epoch, log_detailed_file, x_y_scale[0], x_y_scale[1])   
+        log_file.write(str(epoch)+','+str(train_losses)+',')
         # get dev loss
         curr_dev_losses = vali(args, model, device, dev_loader, x_y_scale[0], x_y_scale[1])  #[dev_error, disp_error, final_disp_error]
         # average out the dev_loss over averg_epoch_n epochs

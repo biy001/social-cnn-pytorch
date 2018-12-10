@@ -13,13 +13,12 @@ just for debugging, mixing all data before seperating
 
 [normal, fill_0, individual] x [mix_all_data, specify_test_set]
 
-(1) normal, mix_all_data               - done wrong disp error/ wrong loss backpropagation
-(2) normal, specify_test_set           - done wrong disp error/ wrong loss backpropagation
-(3) fill_0, mix_all_data               - done wrong disp error/ wrong loss backpropagation - started Sat night, finished Sun night
+(1) normal, mix_all_data               - done with wrong logged losses
+(2) normal, specify_test_set           - done with wrong logged losses
+(3) fill_0, mix_all_data               - done with wrong logged losses - started Sat night, finished Sun night
 (4) fill_0, specify_test_set           - 
 (5) individual, mix_all_data           - 
 (6) individual, specify_test_set       - training: started Sunday night
-
 
 
 12/06 Things to do:
@@ -36,12 +35,10 @@ documentation & analysis
 1. current loss is for each pedistrain in a sequence of T. 
 
 2. training before 12/9 Sunday night (affecting (1)(2)(3)): 
-(a) has wrong disp and final_disp errors, which are incorrectly divided by m^2; 
+(a) has wrong disp and final_disp errors, as well as train and dev losses, which are incorrectly divided by m^2 (only need to be divided by m once); 
 values will be  * inconsistent *  with previous trainings. 
 
-(b) loss for backpropogation in each batch is the sum of all pedestrians in one example; 
-logged train_loss is still for each pedestrian;
-loss curve is still  * consistent *  with previous trainings. 
+(b) Luckily, log_detailed_file still has correct train losses for individual epoches; also dev losses can be corrected by re-running all saved models. 
 
 
 ************************************************************************
@@ -195,8 +192,8 @@ def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file
         target = target.float()
         optimizer.zero_grad()
         output = torch.squeeze(model(data), 2) # batch X 2m X T
-        m = target.size()[1]/2 # m = 1 for individual example case (namely when batch_size != 1). 
-        loss = loss_func(rescaled_for_loss(output, x_scal, y_scal), rescaled_for_loss(target, x_scal, y_scal))/m  # careful to take scale from args
+        # m = target.size()[1]/2 # m = 1 for individual example case (namely when batch_size != 1). 
+        loss = loss_func(rescaled_for_loss(output, x_scal, y_scal), rescaled_for_loss(target, x_scal, y_scal))  # careful to take scale from args
         
         train_loss += loss.item()
         loss.backward()
@@ -214,7 +211,7 @@ def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file
                 100. * batch_idx / len(train_loader), loss.item()))
             log_detailed_file.write(str(epoch)+','+str(batch_idx * len(data))+','+str(loss.item())+'\n')
 
-    train_loss /= len(train_loader.dataset)
+    train_loss /= len(train_loader) # changed from divded by n_examples
     print('average train loss for Epoch {} is: {:.8f}'.format(epoch, train_loss))
 
     with open(os.path.join(save_directory, 'final_train_results_wi_testset_'+str(args.testset)+'.pkl'), 'wb') as f: # format: [(2m X T, 2m X T, 2m X T), (2m X T, 2m X T, 2m X T),...]
@@ -241,23 +238,20 @@ def vali(args, model, device, dev_loader, x_scal, y_scal):
     disp_error = 0
     fina_disp_error = 0
     target_pred_pair_list = []
-    count = 0
     with torch.no_grad():
         for data, target in dev_loader:
-            count += 1
             data, target = data.to(device), target.to(device)
             target = target.float()
             pred = torch.squeeze(model(data), 2) # 1 X 2m X T or batch X 2 X T
-            m = target.size()[1]/2 # number of pedestrians in each example
-            loss = loss_func(rescaled_for_loss(pred, x_scal, y_scal), rescaled_for_loss(target, x_scal, y_scal))/m  # careful to take scale from args
+            loss = loss_func(rescaled_for_loss(pred, x_scal, y_scal), rescaled_for_loss(target, x_scal, y_scal))  # careful to take scale from args
             dev_loss += loss.item() # sum up batch loss
             disp_error += displacement_error(reshape_output(pred,x_scal, y_scal, mode ='disp'), reshape_output(target, x_scal, y_scal, mode ='disp')).item()
             fina_disp_error += final_displacement_error(reshape_output(pred, x_scal, y_scal, mode ='f_disp'), reshape_output(target, x_scal, y_scal, mode ='f_disp')).item()
             target_pred_pair_list.extend(traj_items(args.batch_size, data, target, pred))
 
-    dev_loss /= len(dev_loader.dataset)
-    disp_error /= count     
-    fina_disp_error /= count   
+    dev_loss /= len(dev_loader)
+    disp_error /= len(dev_loader)     
+    fina_disp_error /= len(dev_loader)   
 
     with open(os.path.join(save_directory, 'final_dev_results_wi_testset_'+str(args.testset)+'.pkl'), 'wb') as f: 
         pickle.dump(target_pred_pair_list, f)
@@ -409,30 +403,26 @@ def main():
 
     # from input_pipeline_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
     # from input_pipeline_fill_0_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-    from input_pipeline_individual_pedestrians_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-
-
-
+    # from input_pipeline_individual_pedestrians_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    from input_pipeline_individual_pedestrians import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 
     # Data preprocessor
-    processor = CustomDataPreprocessorForCNN(dev_ratio=0.1, test_ratio=0.1, forcePreProcess=args.forcePreProcess, augmentation=True)
-    # print(processor.scale_factor_x)
-    # print(processor.scale_factor_y)
-    # processor = CustomDataPreprocessorForCNN(input_seq_length=args.input_size, pred_seq_length=args.output_size, test_data_sets = args.testset, dev_ratio_to_test_set = args.dev_ratio, forcePreProcess=args.forcePreProcess)
+    # processor = CustomDataPreprocessorForCNN(dev_ratio=0.1, test_ratio=0.1, forcePreProcess=args.forcePreProcess, augmentation=True)
+    processor = CustomDataPreprocessorForCNN(forcePreProcess=args.forcePreProcess, test_data_sets=[30,35], dev_ratio_to_test_set = 0.5, augmentation=True)
+
     # Processed datasets. (training/dev/test)
     print("Loading data from the pickle files. This may take a while...")
     train_set = CustomDatasetForCNN(processor.processed_train_data_file)
     dev_set = CustomDatasetForCNN(processor.processed_dev_data_file)
     test_set = CustomDatasetForCNN(processor.processed_test_data_file)
     
-    # Use DataLoader object to load data. Note batch_size=1 is necessary since each datum has different rows (i.e. number of pedestrians).
     train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=args.batch_size, shuffle=True)
     dev_loader = torch.utils.data.DataLoader(dataset=dev_set, batch_size=args.batch_size, shuffle=True)
     test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=True)
 
-    print("Training set size: {}".format(len(train_loader)))
-    print("Dev set size: {}".format(len(dev_loader)))
-    print("Test set size: {} (not used in training)".format(len(test_loader)))
+    print("Training set size (n_example/batch_size): {}".format(len(train_loader)))
+    print("Dev set size (n_example/batch_size): {}".format(len(dev_loader)))
+    print("Test set size (n_example/batch_size): {} (not used in training)".format(len(test_loader)))
 
     with open(os.path.join(processor.data_dir, 'scaling_factors.cpkl'), 'rb') as f:
         x_y_scale = pickle.load(f)

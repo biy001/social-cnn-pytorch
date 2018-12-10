@@ -13,12 +13,12 @@ just for debugging, mixing all data before seperating
 
 [normal, fill_0, individual] x [mix_all_data, specify_test_set]
 
-(1) normal, mix_all_data               - done
-(2) normal, specify_test_set           - done
-(3) fill_0, mix_all_data               - problem with delete 0
-(4) fill_0, specify_test_set           - problem with delete 0
-(5) individual, mix_all_data           - haven't implemented batch
-(6) individual, specify_test_set       - haven't implemented batch
+(1) normal, mix_all_data               
+(2) normal, specify_test_set          
+(3) fill_0, mix_all_data              
+(4) fill_0, specify_test_set          
+(5) individual, mix_all_data           
+(6) individual, specify_test_set      
 
 
 

@@ -17,6 +17,11 @@ def plot_traj(args, traj_file):
 	except:
 		sys.exit('Execution stopped: '+args.train_or_dev_or_test+' set does not contain Example '+str(args.example_num)+'. Please choose another example.')
 
+    with open('./data/train/processed/scaling_factors.cpkl', 'rb') as f:
+        x_y_scale = pickle.load(f)
+    x_scaling_factor = x_y_scale[0]; y_scaling_factor = x_y_scale[1]
+    print("The scaling factors: {}, {}".format(x_scaling_factor, y_scaling_factor))
+
 
 	m = int(one_example[0].shape[0]/2) # pedestrian number
 
@@ -26,19 +31,19 @@ def plot_traj(args, traj_file):
 
 	inp = one_example[0]; target = one_example[1]; pred = one_example[2] # 2m X T
 
-	inp_x = inp[::2]*args.x_scaling_factor; inp_y = inp[1::2]*args.y_scaling_factor
-	pred_x = pred[::2]*args.x_scaling_factor; pred_y = pred[1::2]*args.y_scaling_factor
-	targ_x = target[::2]*args.x_scaling_factor; targ_y = target[1::2]*args.y_scaling_factor
+	inp_x = inp[::2]*x_scaling_factor; inp_y = inp[1::2]*y_scaling_factor
+	pred_x = pred[::2]*x_scaling_factor; pred_y = pred[1::2]*y_scaling_factor
+	targ_x = target[::2]*x_scaling_factor; targ_y = target[1::2]*y_scaling_factor
 
 
 	for i in range(m):
 		col = col_list[i%len(col_list)]
-		ax.plot(inp_x[i,:], inp_y[i,:], col+':', label='input '+str(i))
-		ax.plot(pred_x[i,:], pred_y[i,:], col+'o', label='pred '+str(i))
+		ax.plot(inp_x[i,:], inp_y[i,:], col+':', label='input '+str(i+1))
+		ax.plot(pred_x[i,:], pred_y[i,:], col+'o', label='pred '+str(i+1))
 		print('pred:')
 		print(pred_x[i,:])
 		print(pred_y[i,:])
-		ax.plot(targ_x[i,:], targ_y[i,:], col+'--', label='target '+str(i))
+		ax.plot(targ_x[i,:], targ_y[i,:], col+'--', label='target '+str(i+1))
 		print('target:')
 		print(targ_x[i,:])
 		print(targ_y[i,:])
@@ -55,8 +60,8 @@ def plot_traj(args, traj_file):
 def main():
 	parser = argparse.ArgumentParser(description='PyTorch CNNTrajNet')
 	parser.add_argument('--example_num', type=int, default=100, help='the example number to be plotted')
-	parser.add_argument('--x_scaling_factor', type=float, default=0.36883, help='true x = current_x * x_scaling_factor')
-	parser.add_argument('--y_scaling_factor', type=float, default=0.459005, help='true y = current_y * y_scaling_factor')
+	# parser.add_argument('--x_scaling_factor', type=float, default=0.36883, help='true x = current_x * x_scaling_factor')
+	# parser.add_argument('--y_scaling_factor', type=float, default=0.459005, help='true y = current_y * y_scaling_factor')
 	parser.add_argument('--train_or_dev_or_test', type=str, default='train', help='choose among train, dev, and test')
 	plot_traj_args = parser.parse_args()
 

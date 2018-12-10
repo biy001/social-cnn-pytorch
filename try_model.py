@@ -1,29 +1,9 @@
 """
-Experiments on modifying the architecture (end of Thanksgiving week):
-Note 1: max pooling makes performance worse FF.leaky_relu(F.max_pool2d(self.bn1(x), kernel_size = ...)) 
-kernel_size = 2, stride=1, padding = 1, dilation=2 => initial error: 0.08
-kernel_size = 3, stride=1, padding = 1 => initial error: 0.14
-Note 2: adding an extra fc at output doesn't help; adding a 5th conv layer worsens result; increasing conv channels worsens result
-Note 3: a larger dev set portion results in worse train error => more training data could help
-Note 4: dropout doesn't seem to help dev error but could worsen train performance
-Note 5: changing learning rate from 0.001 to 0.0001 or adding learning rate decay doesn't seem to make a difference
-Note 6: Adam is better than SGD
-Note 7: adding batch norm and relu to intermediate fc layer doesn't help
-Note 8: changing relu to leaky_relu improves a lot??? + dev error is much smaller than train error???
-* current version is the best version *
-
-12/05 my thoughts:
-1. maybe still need more data? always not a bad thing. Do try pad 0's
-Questions:
-1. high variance (L2 regularization, dropout all increase bias AND variance)
-2. network needs change? e.g increase network size + regularization <= Kian: not really since you are building an exisiting NN from paper
-3. Is it reasonable I only look at the first few epochs to see the trend <= Kian: no, definitely not enough
 
 Kian's advice:
 1. definitely train longer
 2. tune regularization/dropout at different layers in network; try different combinations
 3. check training set bad examples, does it correspond to any dev set error. 
-4. dev error can be averaged over the close 5 epochs, so less vibrations. # Done
 5. mix some test sets wtih training. I'm thinking maybe try several sets at a time as testing sets, and to be mixed with train sets. 
 maybe test on a Stanford dataset?? since the majority of data is from Stanford
 6. learning rate decay....just try hard try different hyperparameters. 
@@ -31,6 +11,31 @@ maybe test on a Stanford dataset?? since the majority of data is from Stanford
 decoupling pedestrian
 just for debugging, mixing all data before seperating
 
+[normal, fill_0, individual] x [mix_all_data, specify_test_set]
+
+(1) normal, mix_all_data               - done
+(2) normal, specify_test_set           - done
+(3) fill_0, mix_all_data               - problem with delete 0
+(4) fill_0, specify_test_set           - problem with delete 0
+(5) individual, mix_all_data           - haven't implemented batch
+(6) individual, specify_test_set       - haven't implemented batch
+
+
+
+
+12/06 Things to do:
+2. do resume training, plotting loss curve based on a certain trained model in the middle of training
+5. After decoupling pedestrains. change kernel size to 2 and stride of 2   （??? what does it mean）
+
+documentation & analysis
+1. e.g analyze if trying permute make a difference. Just a bunch of tries.
+
+12/9 NOTE:
+
+1. current loss is for each pedistrain in a sequence of T. 
+2. training before 12/9 Sunday night (affecting (1)(2)(3)): 
+(a) has wrong disp and final_disp errors, which are incorrectly divided by m^2
+(b) loss for backpropogation in each batch is the sum of all pedestrians in one example; logged train_loss is still for each pedestrian
 
 
 ************************************************************************
@@ -42,11 +47,12 @@ epochs = 500 # just want to train as long duration as possible; mannually stop (
 
 
 current version:
-lambda_param = 0.02
+lambda_param = 0.001
 dropout_rate = 0.06
-delete_all_zero_rows defaults to False
+delete_all_zero_rows defaults to True
 """
 import os
+import sys
 import torch
 import torch.utils.data
 import pickle
@@ -145,12 +151,32 @@ class CNNTrajNet(nn.Module):
         x = self.output_fc(x) # (N, W, H, C) = 1 X 2m X 1 X T
         return F.leaky_relu(x)
 
-def nonzero_row_index(inp):
-    sr = torch.sum(inp, dim=1) # size = [nrow, 1]
-    sr_ind_tensor = (sr != 0).nonzero() # nonzero index
-    return sr_ind_tensor.numpy().ravel() # index in 1Darray
+def rescaled_for_loss(inpp,x_scaling_factor,y_scaling_factor): # careful it changes (x,y,x,y) to (x,x,y,y) # size is unchanged though
+    return torch.cat((inpp[:, ::2]*x_scaling_factor, inpp[:, 1::2]*y_scaling_factor), 1)  # careful to take scale from args
 
-def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file):
+
+
+def traj_items(batch_size, data, target, output):
+    if batch_size == 1:
+        return [(torch.squeeze(data).cpu().numpy(), torch.squeeze(target).cpu().numpy(), torch.squeeze(output).cpu().detach().numpy())]
+    else:
+        data_2D = torch.squeeze(torch.cat(torch.split(data, 1, dim=0), 1)) # data: batch X 2 X T => data_2D: batch*2 X T
+        target_2D = torch.squeeze(torch.cat(torch.split(target, 1, dim=0), 1)) # target: batch X 2 X T => target_2D: batch*2 X T
+        output_2D = torch.squeeze(torch.cat(torch.split(output, 1, dim=0), 1)) # output: batch X 2 X T => output_2D: batch*2 X T
+        if batch_size < 6:
+            return [(data_2D.cpu().numpy(), target_2D.cpu().numpy(), output_2D.cpu().detach().numpy())]
+        else: 
+            item_list = []
+            data_2D_cluster = torch.split(data_2D, 5*2, dim=0) # 5 pedestrian s in one trajectory plot ("5" is just arbitrarily chosen)
+            target_2D_cluster = torch.split(target_2D, 5*2, dim=0)
+            output_2D_cluster = torch.split(output_2D, 5*2, dim=0)
+            for i in range(len(data_2D_cluster)):
+                item_list.append((data_2D_cluster[i].cpu().numpy(), target_2D_cluster[i].cpu().numpy(), output_2D_cluster[i].cpu().detach().numpy()))
+            return item_list
+
+
+
+def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file, x_scal, y_scal):
     save_directory = 'save/'
     def checkpoint_path(epoch_num):
         return os.path.join(save_directory, 'model_'+str(args.testset)+'_'+str(epoch_num)+'.tar') # careful args.testset is a list..
@@ -159,21 +185,22 @@ def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file
     train_loss = 0
     target_pred_pair_list = []
     for batch_idx, (data, target) in enumerate(train_loader):
-        # delete all_zero rows
-        if args.delete_all_zero_rows:
-            nonzero_ind = nonzero_row_index(torch.squeeze(data,0))
-            data = data[:,nonzero_ind,:]
-            target = target[:,nonzero_ind,:]
-
         data, target = data.to(device), target.to(device)
         target = target.float()
         optimizer.zero_grad()
-        output = torch.squeeze(model(data), 2) # 1 X 2m X T
-        loss = loss_func(output, target)
-        train_loss += (loss.item()/(target.size()[1]/2))
+        output = torch.squeeze(model(data), 2) # batch X 2m X T
+        m = target.size()[1]/2 # m = 1 for individual example case (namely when batch_size != 1). 
+        loss = loss_func(rescaled_for_loss(output, x_scal, y_scal), rescaled_for_loss(target, x_scal, y_scal))/m  # careful to take scale from args
+        
+        train_loss += loss.item()
         loss.backward()
         optimizer.step()
-        target_pred_pair_list.append((torch.squeeze(data).cpu().numpy(), torch.squeeze(target).cpu().numpy(), torch.squeeze(output).cpu().detach().numpy())) 
+
+        # target_pred_pair_list.append((torch.squeeze(data).cpu().numpy(), torch.squeeze(target).cpu().numpy(), torch.squeeze(output).cpu().detach().numpy())) 
+        target_pred_pair_list.extend(traj_items(args.batch_size, data, target, output))
+
+
+
         # losses.append(loss.item())
         if args.verbose and batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
@@ -200,7 +227,7 @@ def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file
 
 
 
-def vali(args, model, device, dev_loader):
+def vali(args, model, device, dev_loader, x_scal, y_scal):
     save_directory = 'save/'
     model.eval()
     loss_func = nn.MSELoss()
@@ -208,36 +235,30 @@ def vali(args, model, device, dev_loader):
     disp_error = 0
     fina_disp_error = 0
     target_pred_pair_list = []
+    count = 0
     with torch.no_grad():
         for data, target in dev_loader:
-            # delete all_zero rows
-            if args.delete_all_zero_rows:
-                nonzero_ind = nonzero_row_index(torch.squeeze(data,0))
-
-
-                data = data[:,nonzero_ind,:]
-                target = target[:,nonzero_ind,:]
+            count += 1
             data, target = data.to(device), target.to(device)
             target = target.float()
-            pred = torch.squeeze(model(data), 2) # 1 X 2m X T
-            m = target.size()[1]/2
-            dev_loss += (loss_func(pred, target).item()/m) # sum up batch loss
-            disp_error += (displacement_error(reshape_output(pred, mode ='disp'), reshape_output(target, mode ='disp')).item()/m)
-            fina_disp_error += (final_displacement_error(reshape_output(pred, mode ='f_disp'), reshape_output(target, mode ='f_disp')).item()/m)
-            target_pred_pair_list.append((torch.squeeze(data).cpu().numpy(), torch.squeeze(target).cpu().numpy(), torch.squeeze(pred).cpu().numpy())) 
+            pred = torch.squeeze(model(data), 2) # 1 X 2m X T or batch X 2 X T
+            m = target.size()[1]/2 # number of pedestrians in each example
+            loss = loss_func(rescaled_for_loss(pred, x_scal, y_scal), rescaled_for_loss(target, x_scal, y_scal))/m  # careful to take scale from args
+            dev_loss += loss.item() # sum up batch loss
+            disp_error += displacement_error(reshape_output(pred,x_scal, y_scal, mode ='disp'), reshape_output(target, x_scal, y_scal, mode ='disp')).item()
+            fina_disp_error += final_displacement_error(reshape_output(pred, x_scal, y_scal, mode ='f_disp'), reshape_output(target, x_scal, y_scal, mode ='f_disp')).item()
+            target_pred_pair_list.extend(traj_items(args.batch_size, data, target, pred))
 
-            # losses.append(dev_loss)
-            
     dev_loss /= len(dev_loader.dataset)
-    disp_error /= len(dev_loader.dataset)
-    fina_disp_error /= len(dev_loader.dataset)
-    # print('\nDev set: Average loss: {:.4f}, disp error: {:.4f}, final disp error: {:.4f}\n'.format(
-    #     dev_loss, disp_error, fina_disp_error))
+    disp_error /= count     
+    fina_disp_error /= count   
+
     with open(os.path.join(save_directory, 'final_dev_results_wi_testset_'+str(args.testset)+'.pkl'), 'wb') as f: 
         pickle.dump(target_pred_pair_list, f)
     return [dev_loss, disp_error, fina_disp_error]
 
-def reshape_output(s, mode ='disp'):
+
+def reshape_output(s, x_scale, y_scale, mode ='disp'):
     """
     Input:  
     - s: (batch, 2 Ped #, seq_len) = 1 X 2m X T
@@ -246,17 +267,19 @@ def reshape_output(s, mode ='disp'):
     - disp: (batch, seq_len, 2) = m X T X 2
     - fina_disp: m X 2
     """
-    # print(s.size())
-    s_2D = torch.squeeze(s) # 2m X T  
-    s_cluster = torch.split(s, 2, dim=1) # (m X T, m X T, m X T, ...)
-    s_stack = torch.stack(s_cluster) # m X 1 X 2 X T
-    s_stack = torch.squeeze(s_stack, 1) # m X 2 X T
-    s_stack_trans = torch.transpose(s_stack, 1, 2) # m X T X 2
+    s_2D = torch.squeeze(torch.cat(torch.split(s, 1, dim=0), 1)) # data: batch X 2m X T => data_2D: batch*2m X T
+    s_3D = torch.unsqueeze(s_2D, 0) #1 X batch*2m X T
+    s_cluster = torch.split(s_3D, 2, dim=1) # (1 X 2 X T, 1 X 2 X T, 1 X 2 X T, ...) 
+    s_cluster_cat = torch.cat(s_cluster,0) # m X 2 X T
+    s_stack_trans = torch.transpose(s_cluster_cat, 1, 2) # m X T X 2
+    x = torch.unsqueeze(s_stack_trans[:,:,0], 2) # m X T X 1
+    y = torch.unsqueeze(s_stack_trans[:,:,1], 2)
+    s_stack_trans_scaled = torch.cat((x*x_scale, y*y_scale), 2) # m X T X 2
 
     if  mode == 'disp':
-        return s_stack_trans
+        return s_stack_trans_scaled
     elif mode == 'f_disp':
-        return torch.squeeze(torch.split(s_stack_trans, 1, dim=1)[-1], 1)
+        return torch.squeeze(torch.split(s_stack_trans_scaled, 1, dim=1)[-1], 1)
 
 
 
@@ -266,7 +289,7 @@ def displacement_error(pred_traj, pred_traj_gt, mode='average'):
     - pred_traj: Tensor of shape (m, seq_len, 2). Predicted trajectory.
     - pred_traj_gt: Tensor of shape (m, seq_len, 2). Ground truth
     predictions.
-    - mode: Can be one of sum, average
+    - mode: Can be sum or average
     Output:
     - loss: gives the eculidian displacement error
     """
@@ -310,26 +333,31 @@ def time_elapsed(elapsed_seconds):
 def main():
     answer = None
     while answer not in ('y', 'n'):
-        answer = input('Did you save the log/save files from the last train model? (y/n)')
+        print('(1) Did you save the log/save files from the last train model?'); print(' ')
+        print('(2) Are you using the correct data pipeline to load train, dev, test sets?'); print(' ')
+        print('(3) Did you run train_fill_0.py to delete all-0 rows and re-dump the preprocessed data WHILE you need to?'); print(' ')
+        print('(4) Did you set a valid batch_size when you are training normal/individual example?')
+        answer = input('(y/n)')
         if answer == 'y':
             print('Great')
         elif answer == 'n':
-            print(' ')
-            print('You should not reach here. You are losing/overwriting log/save files')
-            print(' ')
+            print('Execution stopped:')
+            print('(1) You are not supposed to lose/overwrite log/save files')
+            sys.exit('(3) Please delete all-0 rows before training fill_0 data')
         else:
             print('Please enter y or n')
+
 
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch CNNTrajNet')
     parser.add_argument('--input_size', type=int, default=5) # input sequence length
     parser.add_argument('--output_size', type=int, default=5) # prediction sequence length
-    parser.add_argument('--batch_size', type=int, default=1, 
+    parser.add_argument('--batch_size', type=int, default=100,  #  PLEASE use a batch size a mutiplier of 5 (e.g. 5, 10, 15, 20, ...)
                         help='minibatch (default: 1)')
     parser.add_argument('--epochs', type=int, default=500, 
                         help='number of epochs to train')
 
-    parser.add_argument('--dev_ratio', type=float, default=0.5,      # not using dev set for now
+    parser.add_argument('--dev_ratio', type=float, default=0.5,      # not using this arg for now
                         help='the ratio of dev set to test set')
     parser.add_argument('--testset', type=list, default=[2],     
                         help='test_data_sets (default: [2])')
@@ -357,8 +385,8 @@ def main():
                         help='random seed (default: 1)')
     parser.add_argument('--log_interval', type=int, default=1000,
                         help='how many batches to wait before logging training status')
-    parser.add_argument('--delete_all_zero_rows', type=bool, default=False,     
-                        help='if needs to delete all zero rows')
+    # parser.add_argument('--delete_all_zero_rows', type=bool, default=True,         # done in train_fill_0.py
+    #                     help='if needs to delete all zero rows')
     parser.add_argument('--verbose', type=bool, default=True,     
                         help='printing log')
 
@@ -368,18 +396,29 @@ def main():
     use_cuda = not args.no_cuda and torch.cuda.is_available()
     torch.manual_seed(args.seed)
 
-    if args.delete_all_zero_rows:
-        from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-    else:
-        from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    # if args.delete_all_zero_rows:
+    #     from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    # else:
+    #     from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+
+    # from input_pipeline_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    # from input_pipeline_fill_0_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    from input_pipeline_individual_pedestrians_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+
+
+
 
     # Data preprocessor
-    processor = CustomDataPreprocessorForCNN(input_seq_length=args.input_size, pred_seq_length=args.output_size, test_data_sets = args.testset, dev_ratio_to_test_set = args.dev_ratio, forcePreProcess=args.forcePreProcess)
+    processor = CustomDataPreprocessorForCNN(dev_ratio=0.1, test_ratio=0.1, forcePreProcess=args.forcePreProcess, augmentation=True)
+    # print(processor.scale_factor_x)
+    # print(processor.scale_factor_y)
+    # processor = CustomDataPreprocessorForCNN(input_seq_length=args.input_size, pred_seq_length=args.output_size, test_data_sets = args.testset, dev_ratio_to_test_set = args.dev_ratio, forcePreProcess=args.forcePreProcess)
     # Processed datasets. (training/dev/test)
     print("Loading data from the pickle files. This may take a while...")
     train_set = CustomDatasetForCNN(processor.processed_train_data_file)
     dev_set = CustomDatasetForCNN(processor.processed_dev_data_file)
     test_set = CustomDatasetForCNN(processor.processed_test_data_file)
+    
     # Use DataLoader object to load data. Note batch_size=1 is necessary since each datum has different rows (i.e. number of pedestrians).
     train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=args.batch_size, shuffle=True)
     dev_loader = torch.utils.data.DataLoader(dataset=dev_set, batch_size=args.batch_size, shuffle=True)
@@ -387,7 +426,11 @@ def main():
 
     print("Training set size: {}".format(len(train_loader)))
     print("Dev set size: {}".format(len(dev_loader)))
-    print("Test set size: {}".format(len(test_loader)))
+    print("Test set size: {} (not used in training)".format(len(test_loader)))
+
+    with open(os.path.join(processor.data_dir, 'scaling_factors.cpkl'), 'rb') as f:
+        x_y_scale = pickle.load(f)
+    print("The scaling factors: {}, {}".format(x_y_scale[0], x_y_scale[1]))
     
     # ---------  leave room for a resume option--------
     # add a resume option to continue training from a existing presaved model
@@ -406,15 +449,16 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr = args.learning_rate, weight_decay=args.lambda_param)
     # optimizer = torch.optim.SGD(model.parameters(), lr= args.learning_rate, momentum=0.9, weight_decay=args.lambda_param)
 
-    averg_epoch_n = 15
+    averg_epoch_n = 20
     accum_dev_loss = np.zeros((averg_epoch_n, 3))
     for epoch in range(1, args.epochs + 1):
         # adjust_learning_rate(optimizer, epoch, args.lr_decay_rate, args.learning_rate)
         # get train loss
-        train_losses = train(args, model, device, train_loader, optimizer, epoch, log_detailed_file)   
-        log_file.write(str(epoch)+','+str(train_losses)+',')
+        # train_losses = train(args, model, device, train_loader, optimizer, epoch, log_detailed_file, x_y_scale[0], x_y_scale[1])   
+        # log_file.write(str(epoch)+','+str(train_losses)+',')
         # get dev loss
-        curr_dev_losses = vali(args, model, device, dev_loader)  #[dev_error, disp_error, final_disp_error]
+        curr_dev_losses = vali(args, model, device, dev_loader, x_y_scale[0], x_y_scale[1])  #[dev_error, disp_error, final_disp_error]
+        # average out the dev_loss over averg_epoch_n epochs
         if epoch < averg_epoch_n + 1:
             for i in range(3):
                 accum_dev_loss[epoch-1, i] = curr_dev_losses[i]

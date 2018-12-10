@@ -1,75 +1,136 @@
+'''
+input_pipeline_fill_0_mix_all_data: 
 
-# answer = None
-# while answer not in ('y', 'n'):
-#     answer = input('Do you want to preprocess data of the 0 padding version? (y/n)')
-#     if answer == 'y':
-#         from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-#     elif answer == 'n':
-#         from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-#     else:
-#         print('Please enter y or n')
+Before:
+--> Dumping dev data with size 7167 to pickle file
+--> Dumping test data with size 7167 to pickle file
+--> Dumping train data with size 57336 to pickle file
+
+After deleting zero rows:
+--> Dumping dev data with size 7141 to pickle file
+--> Dumping test data with size 7148 to pickle file
+--> Dumping train data with size 57171 to pickle file
+'''
 
 import os
+import sys
 import torch
 import torch.utils.data
 import pickle
 import numpy as np
 import random
+from tqdm import tqdm
 
+answer = None
+while answer not in ('y', 'n'):
+    answer = input('Do you want to force preprocessing data? (y/n)')
+    if answer == 'y':
+    	print('Confirmed forcePreProcess=True')
+        if_force_preprocess = True
+
+    elif answer == 'n':
+    	print('Confirmed forcePreProcess=False')
+        if_force_preprocess = False
+    else:
+        print('Please enter y or n')
+answer = None
+while answer not in ('y', 'n'):
+    answer = input('Are you using the correct data pipeline to load train, dev, test sets? (y/n)')
+    if answer == 'y':
+    	print('Great')
+    elif answer == 'n':
+    	sys.exit('Execution stopped: please check')
+    else:
+        print('Please enter y or n')
 
 # from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 # from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 # from input_pipeline_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-from input_pipeline_fill_0_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+# from input_pipeline_fill_0_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+from input_pipeline_individual_pedestrians_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+
 
 # Data preprocessor.
-# processor = CustomDataPreprocessorForCNN(test_data_sets = [35], dev_ratio_to_test_set = 0.5, forcePreProcess=True)
-processor = CustomDataPreprocessorForCNN(dev_ratio=0.1, test_ratio=0.1, forcePreProcess=True, augmentation=True)
+# processor = CustomDataPreprocessorForCNN(test_data_sets = [35], dev_ratio_to_test_set = 0.5, forcePreProcess=if_force_preprocess)
+# processor = CustomDataPreprocessorForCNN(forcePreProcess=if_force_preprocess, test_data_sets=[30,35], dev_ratio_to_test_set = 0.8, augmentation=True)
+processor = CustomDataPreprocessorForCNN(dev_ratio=0.1, test_ratio=0.1, forcePreProcess=if_force_preprocess, augmentation=True)
 
 # Processed datasets. (training/dev/test)
 train_set = CustomDatasetForCNN(processor.processed_train_data_file)
 dev_set = CustomDatasetForCNN(processor.processed_dev_data_file)
 test_set = CustomDatasetForCNN(processor.processed_test_data_file)
 
-# Use DataLoader object to load data. Note batch_size=1 is necessary since each datum has different rows (i.e. number of pedestrians).
-train_loader = torch.utils.data.DataLoader(dataset=train_set, batch_size=1, shuffle=True)
-dev_loader = torch.utils.data.DataLoader(dataset=dev_set, batch_size=1, shuffle=True)
-test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=1, shuffle=True)
 
-# Each example is a pair of (input_sequence, prediction_sequence). Each sequence is a torch tensor (matrix) where each row corresponds to 
-# either x or y position of a pedestrian and each column corresponds to a frame.
+def nonzero_row_index(inp): # inp is a 2m X T tensor
+	if inp.size()[0]%2 == 1:
+		sys.exit('Execution stopped at nonzero_row_index(): Error: 2m % 2 == 0 is not satisfied')
+	sr = torch.sum(inp, dim=1) # size = [nrow, 1] # nrow must be an even number
+	sr_ind_tensor = (sr != 0).nonzero() # nonzero index
+	ind_in_1Darray =  sr_ind_tensor.numpy().ravel() # index in 1Darray
+	insert_at = []
+	insert_value = []
+	append_value = False
+	for i in range(ind_in_1Darray.shape[0]):
+		if ind_in_1Darray[i]%2 == 0: # an even index means an x coordinate
+			if i == (ind_in_1Darray.shape[0] - 1):
+				append_value = True
+			elif ind_in_1Darray[i+1] != (ind_in_1Darray[i] + 1):
+				insert_at.append(i+1)
+				insert_value.append(ind_in_1Darray[i] + 1)
+		else: # an odd index means a y coordinate
+			if ind_in_1Darray[i-1] != (ind_in_1Darray[i] - 1):
+				insert_at.append(i)
+				insert_value.append(ind_in_1Darray[i] - 1)
+	new_ind = np.insert(ind_in_1Darray, insert_at, insert_value)
+	if append_value:
+		new_ind = np.append(new_ind, new_ind[-1]+1)
+	return new_ind
 
-print("Training set size: {}".format(len(train_loader)))
-print("Dev set size: {}".format(len(dev_loader)))
-print("Test set size: {}".format(len(test_loader)))
-
-print(processor.scale_factor_x)
-print(processor.scale_factor_y)
-
-# print(next(iter(train_loader)))
-
-# print("  ")
-# print("enter for loop")
-# print("  ")
-# i = 0
-# for batch_idx, (data, target) in enumerate(train_loader):
-# 	print(batch_idx)
-# 	# print(data)
-# 	print(list(data.size()))
-# 	print(list(target.size()))
-# 	print(" ")
-# 	i = i + 1
-# 	if i > 1:
-# 		break
+def delete_all_zero_rows(dataset_pair): # any data set from CustomDatasetForCNN 
+	new_data_pair = []
+	for input_output_pair in tqdm(dataset_pair):
+		data_input, data_output = input_output_pair[0], input_output_pair[1]
+		nonzero_ind = np.intersect1d(nonzero_row_index(data_input), nonzero_row_index(data_output))
+		if nonzero_ind.size == 0: # if there is no nonzero rows
+			continue
+		else:
+			new_data_pair.append((data_input[nonzero_ind,:], data_output[nonzero_ind,:]))
+	return new_data_pair
 
 
+answer = None
+while answer not in ('y', 'n'):
+    answer = input('Do you want to delete all-0 rows and re-dump the trajectory pickle files? (y/n)')
+    if answer == 'y':
+        print('Deleting all-0 rows and re-dumping...')
+		new_dev_set = delete_all_zero_rows(dev_set)
+		print('--> Dumping dev data with size ' + str(len(new_dev_set)) + ' to pickle file')
+		f_dev = open(processor.processed_dev_data_file, 'wb')
+		pickle.dump(new_dev_set, f_dev, protocol=2)
+		f_dev.close()
 
-# argument list
-# embedding_size = 32
-# batch_size = 32
-# learning_rate = 0.001
-# optimizer = Adam
-# loss = L2 loss
-# dropout = 0.5
-# input_size: so confused about padding embedding layer. The size depends on the # of pedestrains???
-# output_size = pred_seq_length ?? 
+		new_test_set = delete_all_zero_rows(test_set)
+		print('--> Dumping test data with size ' + str(len(new_test_set)) + ' to pickle file')
+		f_test = open(processor.processed_test_data_file, 'wb')
+		pickle.dump(new_test_set, f_test, protocol=2)
+		f_test.close()
+
+		new_train_set = delete_all_zero_rows(train_set)
+		print('--> Dumping train data with size ' + str(len(new_train_set)) + ' to pickle file')
+		f_train = open(processor.processed_train_data_file, 'wb')
+		pickle.dump(new_train_set, f_train, protocol=2)
+		f_train.close()
+
+    elif answer == 'n':
+        print(' ')
+    else:
+        print('Please enter y or n')
+
+
+
+
+
+print('--> Saving the scaling factors (' +str(processor.scale_factor_x)+' and '+str(processor.scale_factor_y)+') to pickle file')
+f_scaling = open(os.path.join(processor.data_dir, "scaling_factors.cpkl"), 'wb')
+pickle.dump((processor.scale_factor_x, processor.scale_factor_y), f_scaling, protocol=2)
+f_scaling.close()

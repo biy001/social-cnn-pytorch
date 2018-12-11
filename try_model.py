@@ -352,7 +352,7 @@ def main():
     parser = argparse.ArgumentParser(description='PyTorch CNNTrajNet')
     parser.add_argument('--input_size', type=int, default=5) # input sequence length
     parser.add_argument('--output_size', type=int, default=5) # prediction sequence length
-    parser.add_argument('--batch_size', type=int, default=100,  #  PLEASE use a batch size a mutiplier of 5 (e.g. 5, 10, 15, 20, ...)
+    parser.add_argument('--batch_size', type=int, default=1,  #  PLEASE use a batch size a mutiplier of 5 (e.g. 5, 10, 15, 20, ...)
                         help='minibatch (default: 1)')
     parser.add_argument('--epochs', type=int, default=500, 
                         help='number of epochs to train')
@@ -404,11 +404,12 @@ def main():
     # from input_pipeline_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
     # from input_pipeline_fill_0_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
     # from input_pipeline_individual_pedestrians_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-    from input_pipeline_individual_pedestrians import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    # from input_pipeline_individual_pedestrians import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 
     # Data preprocessor
     # processor = CustomDataPreprocessorForCNN(dev_ratio=0.1, test_ratio=0.1, forcePreProcess=args.forcePreProcess, augmentation=True)
-    processor = CustomDataPreprocessorForCNN(forcePreProcess=args.forcePreProcess, test_data_sets=[30,35], dev_ratio_to_test_set = 0.5, augmentation=True)
+    processor = CustomDataPreprocessorForCNN(forcePreProcess=args.forcePreProcess, test_data_sets=[30,35], dev_ratio_to_test_set = 0.8, augmentation=True)
 
     # Processed datasets. (training/dev/test)
     print("Loading data from the pickle files. This may take a while...")

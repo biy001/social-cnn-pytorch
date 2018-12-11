@@ -48,13 +48,14 @@ while answer not in ('y', 'n'):
 # from input_pipeline_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 # from input_pipeline_fill_0_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 # from input_pipeline_individual_pedestrians_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-from input_pipeline_individual_pedestrians import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+# from input_pipeline_individual_pedestrians import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 
 
 
 # Data preprocessor.
 # processor = CustomDataPreprocessorForCNN(test_data_sets = [35], dev_ratio_to_test_set = 0.5, forcePreProcess=if_force_preprocess)
-processor = CustomDataPreprocessorForCNN(forcePreProcess=if_force_preprocess, test_data_sets=[30,35], dev_ratio_to_test_set = 0.5, augmentation=True)
+processor = CustomDataPreprocessorForCNN(forcePreProcess=if_force_preprocess, test_data_sets=[30,35], dev_ratio_to_test_set = 0.8, augmentation=True)
 # processor = CustomDataPreprocessorForCNN(dev_ratio=0.1, test_ratio=0.1, forcePreProcess=if_force_preprocess, augmentation=True)
 
 
@@ -62,6 +63,10 @@ processor = CustomDataPreprocessorForCNN(forcePreProcess=if_force_preprocess, te
 train_set = CustomDatasetForCNN(processor.processed_train_data_file)
 dev_set = CustomDatasetForCNN(processor.processed_dev_data_file)
 test_set = CustomDatasetForCNN(processor.processed_test_data_file)
+
+print("Training set number of examples: {}".format(len(train_set)))
+print("Dev set size number of examples: {}".format(len(dev_set)))
+print("Test set size number of examples: {}".format(len(test_set)))
 
 
 def nonzero_row_index(inp): # inp is a 2m X T tensor

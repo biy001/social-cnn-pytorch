@@ -64,7 +64,7 @@ train_set = CustomDatasetForCNN(processor.processed_train_data_file)
 dev_set = CustomDatasetForCNN(processor.processed_dev_data_file)
 test_set = CustomDatasetForCNN(processor.processed_test_data_file)
 
-print("Training set number of examples: {}".format(len(train_set)))
+print("Train set number of examples: {}".format(len(train_set)))
 print("Dev set size number of examples: {}".format(len(dev_set)))
 print("Test set size number of examples: {}".format(len(test_set)))
 

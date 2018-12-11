@@ -16,9 +16,9 @@ just for debugging, mixing all data before seperating
 (1) normal, mix_all_data               - done with wrong logged losses
 (2) normal, specify_test_set           - done with wrong logged losses
 (3) fill_0, mix_all_data               - done with wrong logged losses - started Sat night, finished Sun night
-(4) fill_0, specify_test_set           - 
-(5) individual, mix_all_data           - 
-(6) individual, specify_test_set       - training: started Sunday night
+(4) fill_0, specify_test_set           - done: started Sun night, finished Mon morning
+(5) individual, mix_all_data           - done: started Sun night, finished Mon midnight - needs to multiply loss by 100 - only runs 3 hours
+(6) individual, specify_test_set       - training on AWS halfway, started Mon midnight; re-training on laptop, Mon noon
 
 
 12/06 Things to do:
@@ -214,7 +214,8 @@ def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file
     train_loss /= len(train_loader) # changed from divded by n_examples
     print('average train loss for Epoch {} is: {:.8f}'.format(epoch, train_loss))
 
-    with open(os.path.join(save_directory, 'final_train_results_wi_testset_'+str(args.testset)+'.pkl'), 'wb') as f: # format: [(2m X T, 2m X T, 2m X T), (2m X T, 2m X T, 2m X T),...]
+
+    with open(os.path.join(save_directory, 'train_trajectories_'+str(epoch)+'.pkl'), 'wb') as f: 
         pickle.dump(target_pred_pair_list, f)
 
     if epoch % args.save_every == 0:
@@ -253,7 +254,7 @@ def vali(args, model, device, dev_loader, x_scal, y_scal):
     disp_error /= len(dev_loader)     
     fina_disp_error /= len(dev_loader)   
 
-    with open(os.path.join(save_directory, 'final_dev_results_wi_testset_'+str(args.testset)+'.pkl'), 'wb') as f: 
+    with open(os.path.join(save_directory, 'dev_trajectories_'+str(epoch)+'.pkl'), 'wb') as f: 
         pickle.dump(target_pred_pair_list, f)
     return [dev_loss, disp_error, fina_disp_error]
 
@@ -352,7 +353,7 @@ def main():
     parser = argparse.ArgumentParser(description='PyTorch CNNTrajNet')
     parser.add_argument('--input_size', type=int, default=5) # input sequence length
     parser.add_argument('--output_size', type=int, default=5) # prediction sequence length
-    parser.add_argument('--batch_size', type=int, default=1,  #  PLEASE use a batch size a mutiplier of 5 (e.g. 5, 10, 15, 20, ...)
+    parser.add_argument('--batch_size', type=int, default=100,  #  PLEASE use a batch size a mutiplier of 5 (e.g. 5, 10, 15, 20, ...)
                         help='minibatch (default: 1)')
     parser.add_argument('--epochs', type=int, default=500, 
                         help='number of epochs to train')
@@ -403,13 +404,13 @@ def main():
 
     # from input_pipeline_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
     # from input_pipeline_fill_0_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-    # from input_pipeline_individual_pedestrians_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    from input_pipeline_individual_pedestrians_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
     # from input_pipeline_individual_pedestrians import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-    from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    # from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 
     # Data preprocessor
     # processor = CustomDataPreprocessorForCNN(dev_ratio=0.1, test_ratio=0.1, forcePreProcess=args.forcePreProcess, augmentation=True)
-    processor = CustomDataPreprocessorForCNN(forcePreProcess=args.forcePreProcess, test_data_sets=[30,35], dev_ratio_to_test_set = 0.8, augmentation=True)
+    processor = CustomDataPreprocessorForCNN(forcePreProcess=args.forcePreProcess, test_data_sets=[30,35], dev_ratio_to_test_set = 0.5, augmentation=True)
 
     # Processed datasets. (training/dev/test)
     print("Loading data from the pickle files. This may take a while...")

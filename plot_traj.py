@@ -17,10 +17,10 @@ def plot_traj(args, traj_file):
 	except:
 		sys.exit('Execution stopped: '+args.train_or_dev_or_test+' set does not contain Example '+str(args.example_num)+'. Please choose another example.')
 
-    with open('./data/train/processed/scaling_factors.cpkl', 'rb') as f:
-        x_y_scale = pickle.load(f)
-    x_scaling_factor = x_y_scale[0]; y_scaling_factor = x_y_scale[1]
-    print("The scaling factors: {}, {}".format(x_scaling_factor, y_scaling_factor))
+	with open('./data/train/processed/scaling_factors.cpkl', 'rb') as f:
+		x_y_scale = pickle.load(f)
+	x_scaling_factor = x_y_scale[0]; y_scaling_factor = x_y_scale[1]
+	print("The scaling factors: {}, {}".format(x_scaling_factor, y_scaling_factor))
 
 
 	m = int(one_example[0].shape[0]/2) # pedestrian number
@@ -59,10 +59,10 @@ def plot_traj(args, traj_file):
 
 def main():
 	parser = argparse.ArgumentParser(description='PyTorch CNNTrajNet')
-	parser.add_argument('--example_num', type=int, default=100, help='the example number to be plotted')
+	parser.add_argument('--example_num', type=int, default=12000, help='the example number to be plotted')
 	# parser.add_argument('--x_scaling_factor', type=float, default=0.36883, help='true x = current_x * x_scaling_factor')
 	# parser.add_argument('--y_scaling_factor', type=float, default=0.459005, help='true y = current_y * y_scaling_factor')
-	parser.add_argument('--train_or_dev_or_test', type=str, default='train', help='choose among train, dev, and test')
+	parser.add_argument('--train_or_dev_or_test', type=str, default='dev', help='choose among train, dev, and test')
 	plot_traj_args = parser.parse_args()
 
 	save_directory = 'save/'

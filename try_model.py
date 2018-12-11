@@ -231,7 +231,7 @@ def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file
 
 
 
-def vali(args, model, device, dev_loader, x_scal, y_scal):
+def vali(args, model, device, dev_loader, x_scal, y_scal, epoch):
     save_directory = 'save/'
     model.eval()
     loss_func = nn.MSELoss()
@@ -455,7 +455,7 @@ def main():
         train_losses = train(args, model, device, train_loader, optimizer, epoch, log_detailed_file, x_y_scale[0], x_y_scale[1])   
         log_file.write(str(epoch)+','+str(train_losses)+',')
         # get dev loss
-        curr_dev_losses = vali(args, model, device, dev_loader, x_y_scale[0], x_y_scale[1])  #[dev_error, disp_error, final_disp_error]
+        curr_dev_losses = vali(args, model, device, dev_loader, x_y_scale[0], x_y_scale[1], epoch)  #[dev_error, disp_error, final_disp_error]
         # average out the dev_loss over averg_epoch_n epochs
         if epoch < averg_epoch_n + 1:
             for i in range(3):

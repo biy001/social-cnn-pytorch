@@ -89,7 +89,7 @@ def nonzero_row_index(inp): # inp is a 2m X T tensor
             if ind_in_1Darray[i-1] != (ind_in_1Darray[i] - 1):
                 insert_at.append(i)
                 insert_value.append(ind_in_1Darray[i] - 1)
-    ew_ind = np.insert(ind_in_1Darray, insert_at, insert_value)
+    new_ind = np.insert(ind_in_1Darray, insert_at, insert_value)
     if append_value:
         new_ind = np.append(new_ind, new_ind[-1]+1)
     return new_ind

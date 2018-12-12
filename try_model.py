@@ -220,6 +220,7 @@ def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file
 
     if epoch % args.save_every == 0:
         print('Saving model')
+        time.sleep(10)
         torch.save({
             'epoch': epoch,
             'state_dict': model.state_dict(),

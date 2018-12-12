@@ -220,7 +220,7 @@ def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file
 
     if epoch % args.save_every == 0:
         print('Saving model')
-        time.sleep(10) # to avoid failture in synchronizing before saving out a CUDA model
+        # time.sleep(10) # to avoid failture in synchronizing before saving out a CUDA model
         torch.save({
             'epoch': epoch,
             'state_dict': model.state_dict(),

@@ -17,7 +17,7 @@ just for debugging, mixing all data before seperating
 (2) normal, specify_test_set           - done with wrong logged losses
 (3) fill_0, mix_all_data               - done with wrong logged losses - started Sat night, finished Sun night
 (4) fill_0, specify_test_set           - done: started Sun night, finished Mon morning
-(5) individual, mix_all_data           - done: started Sun night, finished Mon midnight - needs to multiply loss by 100 - only runs 3 hours
+(5) individual, mix_all_data           - done: started Sun night, finished Mon midnight - needs to multiply loss by 100 - only runs 3 hours - fixed
 (6) individual, specify_test_set       - training on AWS halfway, started Mon midnight; re-training on laptop, Mon noon
 
 
@@ -154,10 +154,10 @@ class CNNTrajNet(nn.Module):
         x = self.output_fc(x) # (N, W, H, C) = 1 X 2m X 1 X T
         return F.leaky_relu(x)
 
+
+
 def rescaled_for_loss(inpp,x_scaling_factor,y_scaling_factor): # careful it changes (x,y,x,y) to (x,x,y,y) # size is unchanged though
     return torch.cat((inpp[:, ::2]*x_scaling_factor, inpp[:, 1::2]*y_scaling_factor), 1)  # careful to take scale from args
-
-
 
 def traj_items(batch_size, data, target, output):
     if batch_size == 1:
@@ -170,7 +170,7 @@ def traj_items(batch_size, data, target, output):
             return [(data_2D.cpu().numpy(), target_2D.cpu().numpy(), output_2D.cpu().detach().numpy())]
         else: 
             item_list = []
-            data_2D_cluster = torch.split(data_2D, 5*2, dim=0) # 5 pedestrian s in one trajectory plot ("5" is just arbitrarily chosen)
+            data_2D_cluster = torch.split(data_2D, 5*2, dim=0) # 5 pedestrians in one trajectory plot ("5" is just arbitrarily chosen, can be any number)
             target_2D_cluster = torch.split(target_2D, 5*2, dim=0)
             output_2D_cluster = torch.split(output_2D, 5*2, dim=0)
             for i in range(len(data_2D_cluster)):
@@ -332,28 +332,78 @@ def time_elapsed(elapsed_seconds):
 
 
 def main():
+    print('Please select from the following 6 datasets (be consistent with preprocessing done in train.py):')
+    print('(1) normal, mix_all_data')
+    print('(2) normal, specify_test_set')
+    print('(3) fill_0, mix_all_data')
+    print('(4) fill_0, specify_test_set ')
+    print('(5) individual, mix_all_data')
+    print('(6) individual, specify_test_set')
+    model_n = input('Please enter a dataset # (e.g. 1, 2, 3...): ') # output a string
+    # import datapipeline
+    if model_n == str(1):
+        print('Dataset: normal, mix_all_data')
+        from input_pipeline_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    elif model_n == str(2):
+        print('Dataset: normal, specify_test_set')
+        from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    elif model_n == str(3):
+        print('Dataset: fill_0, mix_all_data')
+        from input_pipeline_fill_0_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    elif model_n == str(4):
+        print('Dataset: fill_0, specify_test_set ')
+        from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    elif model_n == str(5):
+        print('Dataset: individual, mix_all_data')
+        from input_pipeline_individual_pedestrians_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    elif model_n == str(6):
+        print('Dataset: individual, specify_test_set')
+        from input_pipeline_individual_pedestrians import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+    else:
+        sys.exit('Execution stopped 1: please check and re-run')
+    # set default_batch_size
+    if model_n == str(1) or model_n == str(2) or model_n == str(3) or model_n == str(4):
+        default_batch_size = 1
+    elif model_n == str(5) or model_n == str(6):
+        default_batch_size = 100
+    else:
+        sys.exit('Execution stopped 2: please check and re-run')
+
+
+    print(' ')
     answer = None
     while answer not in ('y', 'n'):
-        print('(1) Did you save the log/save files from the last train model?'); print(' ')
-        print('(2) Are you using the correct data pipeline to load train, dev, test sets?'); print(' ')
-        print('(3) Did you run train_fill_0.py to delete all-0 rows and re-dump the preprocessed data WHILE you need to?'); print(' ')
-        print('(4) Did you set a valid batch_size when you are training normal/individual examples?')
+        answer = input('Which input-output sequence do you want to use? "y" for (8, 12),  "n" for (5, 5)')
+        if answer == 'y':
+            print('Confirmed (8, 12)')
+            in_out_seq = (8, 12)
+        elif answer == 'n':
+            print('Confirmed (5, 5)')
+            in_out_seq = (5, 5)
+        else:
+            print('Please enter y or n')
+
+
+    answer = None
+    while answer not in ('y', 'n'):
+        print('\n(1) Did you save the log/save files from the last train model?')
+        print('\n(2) Did you run train_fill_0.py to delete all-0 rows and re-dump the preprocessed data WHILE you need to?')
         answer = input('(y/n)')
         if answer == 'y':
             print('Great')
         elif answer == 'n':
             print('Execution stopped:')
             print('(1) You are not supposed to lose/overwrite log/save files')
-            sys.exit('(3) Please delete all-0 rows before training fill_0 data')
+            sys.exit('(2) Please delete all-0 rows before training fill_0 data')
         else:
             print('Please enter y or n')
 
 
     # Training settings
     parser = argparse.ArgumentParser(description='PyTorch CNNTrajNet')
-    parser.add_argument('--input_size', type=int, default=5) # input sequence length
-    parser.add_argument('--output_size', type=int, default=5) # prediction sequence length
-    parser.add_argument('--batch_size', type=int, default=100,  #  PLEASE use a batch size a mutiplier of 5 (e.g. 5, 10, 15, 20, ...)
+    parser.add_argument('--input_size', type=int, default=in_out_seq[0]) # input sequence length
+    parser.add_argument('--output_size', type=int, default=in_out_seq[1]) # prediction sequence length
+    parser.add_argument('--batch_size', type=int, default=default_batch_size,  #  PLEASE use a batch size a mutiplier of 5 (e.g. 5, 10, 15, 20, ...)
                         help='minibatch (default: 1)')
     parser.add_argument('--epochs', type=int, default=500, 
                         help='number of epochs to train')
@@ -397,20 +447,18 @@ def main():
     use_cuda = not args.no_cuda and torch.cuda.is_available()
     torch.manual_seed(args.seed)
 
-    # if args.delete_all_zero_rows:
-    #     from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-    # else:
-    #     from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 
-    # from input_pipeline_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-    # from input_pipeline_fill_0_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-    from input_pipeline_individual_pedestrians_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-    # from input_pipeline_individual_pedestrians import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-    # from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
 
-    # Data preprocessor
-    # processor = CustomDataPreprocessorForCNN(dev_ratio=0.1, test_ratio=0.1, forcePreProcess=args.forcePreProcess, augmentation=True)
-    processor = CustomDataPreprocessorForCNN(forcePreProcess=args.forcePreProcess, test_data_sets=[30,35], dev_ratio_to_test_set = 0.5, augmentation=True)
+    # Data preprocessor.
+    if model_n == str(2):
+        processor = CustomDataPreprocessorForCNN(input_seq_length=in_out_seq[0], pred_seq_length=in_out_seq[1], forcePreProcess=False, test_data_sets=[30,35], dev_ratio_to_test_set = 0.8, augmentation=True)
+    elif model_n == str(1) or model_n == str(3) or model_n == str(5):
+        processor = CustomDataPreprocessorForCNN(input_seq_length=in_out_seq[0], pred_seq_length=in_out_seq[1], dev_ratio=0.1, test_ratio=0.1, forcePreProcess=False, augmentation=True)
+    elif model_n == str(4) or model_n == str(6):
+        processor = CustomDataPreprocessorForCNN(input_seq_length=in_out_seq[0], pred_seq_length=in_out_seq[1], forcePreProcess=False, test_data_sets=[30,35], dev_ratio_to_test_set = 0.5, augmentation=True)
+    else:
+        sys.exit('Execution stopped 3: please check and re-run')
+
 
     # Processed datasets. (training/dev/test)
     print("Loading data from the pickle files. This may take a while...")
@@ -422,7 +470,7 @@ def main():
     dev_loader = torch.utils.data.DataLoader(dataset=dev_set, batch_size=args.batch_size, shuffle=True)
     test_loader = torch.utils.data.DataLoader(dataset=test_set, batch_size=args.batch_size, shuffle=True)
 
-    print("Training set size (n_example/batch_size): {}".format(len(train_loader)))
+    print("Train set size (n_example/batch_size): {}".format(len(train_loader)))
     print("Dev set size (n_example/batch_size): {}".format(len(dev_loader)))
     print("Test set size (n_example/batch_size): {} (not used in training)".format(len(test_loader)))
 

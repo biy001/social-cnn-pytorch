@@ -371,17 +371,22 @@ def main():
 
 
     print(' ')
-    answer = None
-    while answer not in ('y', 'n'):
-        answer = input('Which input-output sequence do you want to use? "y" for (8, 12),  "n" for (5, 5)')
-        if answer == 'y':
+    in_out_squ_bool = None
+    while in_out_squ_bool not in ('y', 'n'):
+        in_out_squ_bool = input('Which input-output sequence do you want to use? "y" for (8, 12),  "n" for (5, 5)')
+        if in_out_squ_bool == 'y':
             print('Confirmed (8, 12)')
             in_out_seq = (8, 12)
-        elif answer == 'n':
+        elif in_out_squ_bool == 'n':
             print('Confirmed (5, 5)')
             in_out_seq = (5, 5)
         else:
             print('Please enter y or n')
+
+    if in_out_squ_bool=='y' and (model_n == str(5) or model_n == str(6)):
+    	default_log_interval = 100
+    else:
+    	default_log_interval = 1000
 
 
     answer = None
@@ -434,7 +439,7 @@ def main():
                         help='disables CUDA training')
     parser.add_argument('--seed', type=int, default=1,
                         help='random seed (default: 1)')
-    parser.add_argument('--log_interval', type=int, default=1000,
+    parser.add_argument('--log_interval', type=int, default=default_log_interval,
                         help='how many batches to wait before logging training status')
     # parser.add_argument('--delete_all_zero_rows', type=bool, default=True,         # done in train_fill_0.py
     #                     help='if needs to delete all zero rows')

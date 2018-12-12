@@ -377,9 +377,11 @@ def main():
         if in_out_squ_bool == 'y':
             print('Confirmed (8, 12)')
             in_out_seq = (8, 12)
+            default_epochs = 1500
         elif in_out_squ_bool == 'n':
             print('Confirmed (5, 5)')
             in_out_seq = (5, 5)
+            default_epochs = 500
         else:
             print('Please enter y or n')
 
@@ -410,7 +412,7 @@ def main():
     parser.add_argument('--output_size', type=int, default=in_out_seq[1]) # prediction sequence length
     parser.add_argument('--batch_size', type=int, default=default_batch_size,  #  PLEASE use a batch size a mutiplier of 5 (e.g. 5, 10, 15, 20, ...)
                         help='minibatch (default: 1)')
-    parser.add_argument('--epochs', type=int, default=500, 
+    parser.add_argument('--epochs', type=int, default=default_epochs, 
                         help='number of epochs to train')
 
     parser.add_argument('--dev_ratio', type=float, default=0.5,      # not using this arg for now

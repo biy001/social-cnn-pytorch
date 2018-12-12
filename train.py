@@ -21,52 +21,77 @@ import numpy as np
 import random
 from tqdm import tqdm
 
+print('Please select from the following 6 datasets:')
+print('(1) normal, mix_all_data')
+print('(2) normal, specify_test_set')
+print('(3) fill_0, mix_all_data')
+print('(4) fill_0, specify_test_set ')
+print('(5) individual, mix_all_data')
+print('(6) individual, specify_test_set')
+model_n = input('Please enter a model # (e.g. 1, 2, 3...): ')
+if model_n == str(1):
+    print('Dataset: normal, mix_all_data')
+    from input_pipeline_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+elif model_n == str(2):
+    print('Dataset: normal, specify_test_set')
+    from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+elif model_n == str(3):
+    print('Dataset: fill_0, mix_all_data')
+    from input_pipeline_fill_0_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+elif model_n == str(4):
+    print('Dataset: fill_0, specify_test_set ')
+    from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+elif model_n == str(5):
+    print('Dataset: individual, mix_all_data')
+    from input_pipeline_individual_pedestrians_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+elif model_n == str(6):
+    print('Dataset: individual, specify_test_set')
+    from input_pipeline_individual_pedestrians import CustomDataPreprocessorForCNN, CustomDatasetForCNN
+else:
+    sys.exit('Execution stopped 1: please check and re-run')
+
+
+print(' ')
+answer = None
+while answer not in ('y', 'n'):
+    answer = input('Which input-output sequence do you want to use? "y" for (8, 12),  "n" for (5, 5)')
+    if answer == 'y':
+        print('Confirmed (8, 12)')
+        in_out_seq = (8, 12)
+    elif answer == 'n':
+        print('Confirmed (5, 5)')
+        in_out_seq = (5, 5)
+    else:
+        print('Please enter y or n')
+     
+print(' ')
 answer = None
 while answer not in ('y', 'n'):
     answer = input('Do you want to force preprocessing data? (y/n)')
     if answer == 'y':
         print('Confirmed forcePreProcess=True')
         if_force_preprocess = True
-
     elif answer == 'n':
         print('Confirmed forcePreProcess=False')
         if_force_preprocess = False
     else:
         print('Please enter y or n')
-answer = None
-while answer not in ('y', 'n'):
-    answer = input('Are you using the correct data pipeline to load train, dev, test sets? (y/n)')
-    if answer == 'y':
-        print('Great')
-    elif answer == 'n':
-        sys.exit('Execution stopped: please check')
-    else:
-        print('Please enter y or n')
-
-# from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-# from input_pipeline_fill_0 import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-# from input_pipeline_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-# from input_pipeline_fill_0_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-# from input_pipeline_individual_pedestrians_mix_all_data import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-# from input_pipeline_individual_pedestrians import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-from input_pipeline import CustomDataPreprocessorForCNN, CustomDatasetForCNN
-
-
 
 # Data preprocessor.
-# processor = CustomDataPreprocessorForCNN(test_data_sets = [35], dev_ratio_to_test_set = 0.5, forcePreProcess=if_force_preprocess)
-processor = CustomDataPreprocessorForCNN(forcePreProcess=if_force_preprocess, test_data_sets=[30,35], dev_ratio_to_test_set = 0.8, augmentation=True)
-# processor = CustomDataPreprocessorForCNN(dev_ratio=0.1, test_ratio=0.1, forcePreProcess=if_force_preprocess, augmentation=True)
+if model_n == str(2):
+    processor = CustomDataPreprocessorForCNN(input_seq_length=in_out_seq[0], pred_seq_length=in_out_seq[1], forcePreProcess=if_force_preprocess, test_data_sets=[30,35], dev_ratio_to_test_set = 0.8, augmentation=True)
+elif model_n == str(1) or model_n == str(3) or model_n == str(5):
+    processor = CustomDataPreprocessorForCNN(input_seq_length=in_out_seq[0], pred_seq_length=in_out_seq[1], dev_ratio=0.1, test_ratio=0.1, forcePreProcess=if_force_preprocess, augmentation=True)
+elif model_n == str(4) or model_n == str(6):
+    processor = CustomDataPreprocessorForCNN(input_seq_length=in_out_seq[0], pred_seq_length=in_out_seq[1], forcePreProcess=if_force_preprocess, test_data_sets=[30,35], dev_ratio_to_test_set = 0.5, augmentation=True)
+else:
+    sys.exit('Execution stopped 2: please check and re-run')
 
 
 # Processed datasets. (training/dev/test)
 train_set = CustomDatasetForCNN(processor.processed_train_data_file)
 dev_set = CustomDatasetForCNN(processor.processed_dev_data_file)
 test_set = CustomDatasetForCNN(processor.processed_test_data_file)
-
-print("Train set number of examples: {}".format(len(train_set)))
-print("Dev set size number of examples: {}".format(len(dev_set)))
-print("Test set size number of examples: {}".format(len(test_set)))
 
 
 def nonzero_row_index(inp): # inp is a 2m X T tensor
@@ -106,39 +131,31 @@ def delete_all_zero_rows(dataset_pair): # any data set from CustomDatasetForCNN
     return new_data_pair
 
 
-answer = None
-while answer not in ('y', 'n'):
-    answer = input('Do you want to delete all-0 rows and re-dump the trajectory pickle files? (y/n)')
-    if answer == 'y':
-        print('Deleting all-0 rows and re-dumping...')
-        new_dev_set = delete_all_zero_rows(dev_set)
-        print('--> Dumping dev data with size ' + str(len(new_dev_set)) + ' to pickle file')
-        f_dev = open(processor.processed_dev_data_file, 'wb')
-        pickle.dump(new_dev_set, f_dev, protocol=2)
-        f_dev.close()
+if (model_n == str(3) or model_n == str(4)) and if_force_preprocess:
+    print('Deleting all-0 rows and re-dumping...')
+    new_dev_set = delete_all_zero_rows(dev_set)
+    print('--> Dumping dev data with size ' + str(len(new_dev_set)) + ' to pickle file')
+    f_dev = open(processor.processed_dev_data_file, 'wb')
+    pickle.dump(new_dev_set, f_dev, protocol=2)
+    f_dev.close()
 
-        new_test_set = delete_all_zero_rows(test_set)
-        print('--> Dumping test data with size ' + str(len(new_test_set)) + ' to pickle file')
-        f_test = open(processor.processed_test_data_file, 'wb')
-        pickle.dump(new_test_set, f_test, protocol=2)
-        f_test.close()
+    new_test_set = delete_all_zero_rows(test_set)
+    print('--> Dumping test data with size ' + str(len(new_test_set)) + ' to pickle file')
+    f_test = open(processor.processed_test_data_file, 'wb')
+    pickle.dump(new_test_set, f_test, protocol=2)
+    f_test.close()
 
-        new_train_set = delete_all_zero_rows(train_set)
-        print('--> Dumping train data with size ' + str(len(new_train_set)) + ' to pickle file')
-        f_train = open(processor.processed_train_data_file, 'wb')
-        pickle.dump(new_train_set, f_train, protocol=2)
-        f_train.close()
-
-    elif answer == 'n':
-        print(' ')
-    else:
-        print('Please enter y or n')
-
-
-
-
+    new_train_set = delete_all_zero_rows(train_set)
+    print('--> Dumping train data with size ' + str(len(new_train_set)) + ' to pickle file')
+    f_train = open(processor.processed_train_data_file, 'wb')
+    pickle.dump(new_train_set, f_train, protocol=2)
+    f_train.close()
 
 print('--> Saving the scaling factors (' +str(processor.scale_factor_x)+' and '+str(processor.scale_factor_y)+') to pickle file')
 f_scaling = open(os.path.join(processor.data_dir, "scaling_factors.cpkl"), 'wb')
 pickle.dump((processor.scale_factor_x, processor.scale_factor_y), f_scaling, protocol=2)
 f_scaling.close()
+
+print("Train set number of examples: {}".format(len(train_set)))
+print("Dev set size number of examples: {}".format(len(dev_set)))
+print("Test set size number of examples: {}".format(len(test_set)))

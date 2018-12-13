@@ -156,7 +156,7 @@ print('Scaling factors: ' +str(processor.scale_factor_x)+' and '+str(processor.s
 print('Global minimums: ' +str(processor.x_global_min)+' and '+str(processor.y_global_min))
 
 
-f_scaling = open(os.path.join(processor.data_dir, "scaling_factors.cpkl"), 'wb')
+f_scaling = open(os.path.join(processor.data_dir, "scaling_factor_global_min.cpkl"), 'wb')
 pickle.dump((processor.scale_factor_x, processor.scale_factor_y, processor.x_global_min, processor.y_global_min), f_scaling, protocol=2)
 f_scaling.close()
 

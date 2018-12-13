@@ -81,7 +81,7 @@ while answer not in ('y', 'n'):
 if model_n == str(2):
     processor = CustomDataPreprocessorForCNN(input_seq_length=in_out_seq[0], pred_seq_length=in_out_seq[1], forcePreProcess=if_force_preprocess, test_data_sets=[30,35], dev_ratio_to_test_set = 0.8, augmentation=True)
 elif model_n == str(1) or model_n == str(3) or model_n == str(5):
-    processor = CustomDataPreprocessorForCNN(input_seq_length=in_out_seq[0], pred_seq_length=in_out_seq[1], dev_ratio=0.1, test_ratio=0.1, forcePreProcess=if_force_preprocess, augmentation=True)
+    processor = CustomDataPreprocessorForCNN(input_seq_length=in_out_seq[0], pred_seq_length=in_out_seq[1], dev_ratio=0.1, test_ratio=0.01, forcePreProcess=if_force_preprocess, augmentation=True)
 elif model_n == str(4) or model_n == str(6):
     processor = CustomDataPreprocessorForCNN(input_seq_length=in_out_seq[0], pred_seq_length=in_out_seq[1], forcePreProcess=if_force_preprocess, test_data_sets=[30,35], dev_ratio_to_test_set = 0.5, augmentation=True)
 else:
@@ -151,9 +151,13 @@ if (model_n == str(3) or model_n == str(4)) and if_force_preprocess:
     pickle.dump(new_train_set, f_train, protocol=2)
     f_train.close()
 
-print('--> Saving the scaling factors (' +str(processor.scale_factor_x)+' and '+str(processor.scale_factor_y)+') to pickle file')
+print('Saving the scaling factors and the global minimum values in x and y to pickle files...')
+print('Scaling factors: ' +str(processor.scale_factor_x)+' and '+str(processor.scale_factor_y))
+print('Global minimums: ' +str(processor.x_global_min)+' and '+str(processor.y_global_min))
+
+
 f_scaling = open(os.path.join(processor.data_dir, "scaling_factors.cpkl"), 'wb')
-pickle.dump((processor.scale_factor_x, processor.scale_factor_y), f_scaling, protocol=2)
+pickle.dump((processor.scale_factor_x, processor.scale_factor_y, processor.x_global_min, processor.y_global_min), f_scaling, protocol=2)
 f_scaling.close()
 
 print("Train set number of examples: {}".format(len(train_set)))

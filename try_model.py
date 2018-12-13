@@ -29,16 +29,19 @@ documentation & analysis
 1. e.g analyze if trying permute make a difference. Just a bunch of tries.
 
 
-
 12/9 NOTE:
-
 1. current loss is for each pedistrain in a sequence of T. 
-
 2. training before 12/9 Sunday night (affecting (1)(2)(3)): 
 (a) has wrong disp and final_disp errors, as well as train and dev losses, which are incorrectly divided by m^2 (only need to be divided by m once); 
 values will be  * inconsistent *  with previous trainings. 
-
 (b) Luckily, log_detailed_file still has correct train losses for individual epoches; also dev losses can be corrected by re-running all saved models. 
+
+12/11 NOTE:
+1. Loss is still decreasing around Epoch 500. Not sure how many epochs are good to go. 
+2. Is it necessary to re-run dataset (3) fill_0, mix_all_data for another 20+ hrs?
+3. run in-out sequence (8,12) for 1500 epochs since it is so fast (500 epochs for less than an hour)
+4. In milestone, I saw something called "negative Gaussian log-likelihood loss" to fit the mean and the covariance parameters of the bivariate Gaussian distribution...?
+
 
 
 ************************************************************************
@@ -215,12 +218,12 @@ def train(args, model, device, train_loader, optimizer, epoch, log_detailed_file
     print('average train loss for Epoch {} is: {:.8f}'.format(epoch, train_loss))
 
 
-    with open(os.path.join(save_directory, 'train_trajectories_'+str(epoch)+'.pkl'), 'wb') as f: 
-        pickle.dump(target_pred_pair_list, f)
 
     if epoch % args.save_every == 0:
+        with open(os.path.join(save_directory, 'train_trajectories_'+str(epoch)+'.pkl'), 'wb') as f: 
+            pickle.dump(target_pred_pair_list, f)
         print('Saving model')
-        # time.sleep(10) # to avoid failture in synchronizing before saving out a CUDA model
+        # time.sleep(10)  # to avoid failture in synchronizing before saving out a CUDA model
         torch.save({
             'epoch': epoch,
             'state_dict': model.state_dict(),
@@ -255,8 +258,10 @@ def vali(args, model, device, dev_loader, x_scal, y_scal, epoch):
     disp_error /= len(dev_loader)     
     fina_disp_error /= len(dev_loader)   
 
-    with open(os.path.join(save_directory, 'dev_trajectories_'+str(epoch)+'.pkl'), 'wb') as f: 
-        pickle.dump(target_pred_pair_list, f)
+
+    if epoch % args.save_every == 0:      
+        with open(os.path.join(save_directory, 'dev_trajectories_'+str(epoch)+'.pkl'), 'wb') as f: 
+            pickle.dump(target_pred_pair_list, f)
     return [dev_loss, disp_error, fina_disp_error]
 
 
@@ -395,7 +400,7 @@ def main():
     answer = None
     while answer not in ('y', 'n'):
         print('\n(1) Did you save the log/save files from the last train model?')
-        print('\n(2) Did you run train_fill_0.py to delete all-0 rows and re-dump the preprocessed data WHILE you need to?')
+        print('\n(2) Did you run train.py to delete all-0 rows and re-dump the preprocessed data WHILE you need to?')
         answer = input('(y/n)')
         if answer == 'y':
             print('Great')
@@ -423,7 +428,7 @@ def main():
     parser.add_argument('--forcePreProcess', type=bool, default=False,     
                         help='forcePreProcess (default: False)')
     # Frequency at which the model should be saved parameter
-    parser.add_argument('--save_every', type=int, default=1,      # don't forget
+    parser.add_argument('--save_every', type=int, default=100,      # don't forget
                         help='save frequency')
     # Dropout probability parameter
     parser.add_argument('--dropout_rate', type=float, default=0.06,       # dropout 

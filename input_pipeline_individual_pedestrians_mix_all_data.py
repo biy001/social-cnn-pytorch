@@ -1,3 +1,4 @@
+# input_pipeline_individual_pedestrians_mix_all_data.py
 import os
 import torch
 import torch.utils.data
@@ -7,31 +8,32 @@ import random
 from tqdm import tqdm
 
 class CustomDataPreprocessorForCNN():
-    def __init__(self, input_seq_length=5, pred_seq_length=5, datasets=[i for i in range(37)], dev_ratio=0.1, test_ratio=0.1, forcePreProcess=False, augmentation=False):
-        self.data_paths = ['./data/train/raw/biwi/biwi_hotel.txt', './data/train/raw/crowds/arxiepiskopi1.txt',
-                          './data/train/raw/crowds/crowds_zara02.txt', './data/train/raw/crowds/crowds_zara03.txt',
-                          './data/train/raw/crowds/students001.txt', './data/train/raw/crowds/students003.txt', 
-                          './data/train/raw/stanford/bookstore_0.txt',
-                          './data/train/raw/stanford/bookstore_1.txt', './data/train/raw/stanford/bookstore_2.txt',
-                          './data/train/raw/stanford/bookstore_3.txt', './data/train/raw/stanford/coupa_3.txt',
-                          './data/train/raw/stanford/deathCircle_0.txt', './data/train/raw/stanford/deathCircle_1.txt',
-                          './data/train/raw/stanford/deathCircle_2.txt', './data/train/raw/stanford/deathCircle_3.txt',
-                          './data/train/raw/stanford/deathCircle_4.txt', './data/train/raw/stanford/gates_0.txt',
-                          './data/train/raw/stanford/gates_1.txt', './data/train/raw/stanford/gates_3.txt',
-                          './data/train/raw/stanford/gates_4.txt', './data/train/raw/stanford/gates_5.txt',
-                          './data/train/raw/stanford/gates_6.txt', './data/train/raw/stanford/gates_7.txt',
-                          './data/train/raw/stanford/gates_8.txt', './data/train/raw/stanford/hyang_4.txt',
-                          './data/train/raw/stanford/hyang_5.txt', './data/train/raw/stanford/hyang_6.txt',
-                          './data/train/raw/stanford/hyang_7.txt', './data/train/raw/stanford/hyang_9.txt',
-                          './data/train/raw/stanford/nexus_0.txt', './data/train/raw/stanford/nexus_1.txt',
-                          './data/train/raw/stanford/nexus_2.txt', './data/train/raw/stanford/nexus_3.txt',
-                          './data/train/raw/stanford/nexus_4.txt', './data/train/raw/stanford/nexus_7.txt',
-                          './data/train/raw/stanford/nexus_8.txt', './data/train/raw/stanford/nexus_9.txt']
+    def __init__(self, input_seq_length=5, pred_seq_length=5, datasets=[i for i in range(37)], dev_ratio=0.1, test_ratio=0.1, forcePreProcess=False, augmentation=False, pre_dir='.'):
+        self.data_paths = ['/data/train/raw/biwi/biwi_hotel.txt', '/data/train/raw/crowds/arxiepiskopi1.txt',
+                          '/data/train/raw/crowds/crowds_zara02.txt', '/data/train/raw/crowds/crowds_zara03.txt',
+                          '/data/train/raw/crowds/students001.txt', '/data/train/raw/crowds/students003.txt', 
+                          '/data/train/raw/stanford/bookstore_0.txt',
+                          '/data/train/raw/stanford/bookstore_1.txt', '/data/train/raw/stanford/bookstore_2.txt',
+                          '/data/train/raw/stanford/bookstore_3.txt', '/data/train/raw/stanford/coupa_3.txt',
+                          '/data/train/raw/stanford/deathCircle_0.txt', '/data/train/raw/stanford/deathCircle_1.txt',
+                          '/data/train/raw/stanford/deathCircle_2.txt', '/data/train/raw/stanford/deathCircle_3.txt',
+                          '/data/train/raw/stanford/deathCircle_4.txt', '/data/train/raw/stanford/gates_0.txt',
+                          '/data/train/raw/stanford/gates_1.txt', '/data/train/raw/stanford/gates_3.txt',
+                          '/data/train/raw/stanford/gates_4.txt', '/data/train/raw/stanford/gates_5.txt',
+                          '/data/train/raw/stanford/gates_6.txt', '/data/train/raw/stanford/gates_7.txt',
+                          '/data/train/raw/stanford/gates_8.txt', '/data/train/raw/stanford/hyang_4.txt',
+                          '/data/train/raw/stanford/hyang_5.txt', '/data/train/raw/stanford/hyang_6.txt',
+                          '/data/train/raw/stanford/hyang_7.txt', '/data/train/raw/stanford/hyang_9.txt',
+                          '/data/train/raw/stanford/nexus_0.txt', '/data/train/raw/stanford/nexus_1.txt',
+                          '/data/train/raw/stanford/nexus_2.txt', '/data/train/raw/stanford/nexus_3.txt',
+                          '/data/train/raw/stanford/nexus_4.txt', '/data/train/raw/stanford/nexus_7.txt',
+                          '/data/train/raw/stanford/nexus_8.txt', '/data/train/raw/stanford/nexus_9.txt']
+        self.data_paths = [pre_dir+i for i in self.data_paths]  
         # Number of datasets
         self.numDatasets = len(self.data_paths)
         
         # Data directory where the pre-processed pickle file resides
-        self.data_dir = './data/train/processed'
+        self.data_dir = pre_dir + '/data/train/processed'
         
         # Store the arguments
         self.input_seq_length = input_seq_length
@@ -50,6 +52,9 @@ class CustomDataPreprocessorForCNN():
         # Scale Factor for x and y (computed in self.process())
         self.scale_factor_x = None
         self.scale_factor_y = None
+
+        self.x_global_min = None
+        self.y_global_min = None
         
         # Data augmentation flag
         self.augmentation = augmentation
@@ -108,6 +113,9 @@ class CustomDataPreprocessorForCNN():
                 y_max_global = y_max
         self.scale_factor_x = (x_max_global - x_min_global)/(1 + 1)
         self.scale_factor_y = (y_max_global - y_min_global)/(1 + 1)
+
+        self.x_global_min = x_min_global
+        self.y_global_min = y_min_global
         # Normalize all the data to range from -1 to 1.
         for data in self.raw_data:
             x = data[2,:]

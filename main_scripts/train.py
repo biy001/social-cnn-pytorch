@@ -1,61 +1,10 @@
 """
-
-Kian's advice:
-1. definitely train longer
-2. tune regularization/dropout at different layers in network; try different combinations
-3. check training set bad examples, does it correspond to any dev set error. 
-5. mix some test sets wtih training. I'm thinking maybe try several sets at a time as testing sets, and to be mixed with train sets. 
-maybe test on a Stanford dataset?? since the majority of data is from Stanford
-6. learning rate decay....just try hard try different hyperparameters. 
-
-decoupling pedestrian
-just for debugging, mixing all data before seperating
-
-[normal, fill_0, individual] x [mix_all_data, specify_test_set]
-
-(1) normal, mix_all_data               - done with wrong logged losses
-(2) normal, specify_test_set           - done with wrong logged losses
-(3) fill_0, mix_all_data               - done with wrong logged losses - started Sat night, finished Sun night
-(4) fill_0, specify_test_set           - done: started Sun night, finished Mon morning
-(5) individual, mix_all_data           - done: started Sun night, finished Mon midnight - needs to multiply loss by 100 - only runs 3 hours - fixed
-(6) individual, specify_test_set       - training on AWS halfway, started Mon midnight; re-training on laptop, Mon noon
-
-
-12/06 Things to do:
-2. do resume training, plotting loss curve based on a certain trained model in the middle of training
-5. After decoupling pedestrains. change kernel size to 2 and stride of 2   （??? what does it mean）
-
-documentation & analysis
-1. e.g analyze if trying permute make a difference. Just a bunch of tries.
-
-
-12/9 NOTE:
-1. current loss is for each pedistrain in a sequence of T. 
-2. training before 12/9 Sunday night (affecting (1)(2)(3)): 
-(a) has wrong disp and final_disp errors, as well as train and dev losses, which are incorrectly divided by m^2 (only need to be divided by m once); 
-values will be  * inconsistent *  with previous trainings. 
-(b) Luckily, log_detailed_file still has correct train losses for individual epoches; also dev losses can be corrected by re-running all saved models. 
-
-12/11 NOTE:
-1. Loss is still decreasing around Epoch 500. Not sure how many epochs are good to go. 
-2. Is it necessary to re-run dataset (3) fill_0, mix_all_data for another 20+ hrs?
-3. run in-out sequence (8,12) for 1500 epochs since it is so fast (500 epochs for less than an hour)
-4. In milestone, I saw something called "negative Gaussian log-likelihood loss" to fit the mean and the covariance parameters of the bivariate Gaussian distribution...?
-
-
-
-************************************************************************
-------------------- PLEASE READ BEFORE TRAINING ------------------- 
-************************************************************************
-Specs: 
-dev_ratio = 0.5 when test set can be selected; dev_ratio = test_ratio = 0.1 for mixed datasets. 
-epochs = 500 # just want to train as long duration as possible; mannually stop (Ctl+C) anytime if needs to stop
-
-
-current version:
-lambda_param = 0.001
-dropout_rate = 0.06
-delete_all_zero_rows defaults to True
+(1) normal, mix_all_data               
+(2) normal, specify_test_set           
+(3) fill_0, mix_all_data              
+(4) fill_0, specify_test_set          
+(5) individual, mix_all_data          
+(6) individual, specify_test_set       
 """
 import os
 import sys

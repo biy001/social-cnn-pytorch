@@ -7,4 +7,5 @@ This project aims to predict human trajectories in dense crowds for robotic moti
 ![](main_traj.png)
 
 [1] A. Sadeghian, V. Kosaraju, A. Gupta, S. Savarese, and A. Alahi, “Trajnet: Towards a benchmark for human trajectory prediction,” arXiv preprint, 2018.
+
 [2] N. Nikhil and B. T. Morris, “Convolutional neural networkfor trajectory prediction,” arXiv preprint arXiv:1809.00696, 2018.

@@ -5,7 +5,9 @@ This repository was built for the Stanford CS230 course project "Human Trajector
 # Abstract
 This project aims to predict human trajectories in dense crowds for robotic motion planning applications. Inspired by prior work [2] and a recent success in Convolutional Neural Networks (CNN) for sequence-to-sequence tasks, we propose a data-driven approach that employs CNN for trajectory prediction of multiple pedestrians at once. The performance evaluation on a publicly available dataset [1] suggests that our approach successfully predicts reasonable trajectories for multiple pedestrians in different scenes. The extensive error analysis and the trajectory analysis also reveal the cases where our model has difficulty in capturing unusual pedestrian behavior or social interactions.
 
-![](main_traj.png)
+<p align="center">
+  <img src="main_traj.png">
+</p>
 
 [1] A. Sadeghian, V. Kosaraju, A. Gupta, S. Savarese, and A. Alahi, “Trajnet: Towards a benchmark for human trajectory prediction,” arXiv preprint, 2018.
 
